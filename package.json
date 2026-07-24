@@ -1,0 +1,11 @@
+{
+  "name": "heat-transfer-simulator",
+  "version": "0.1.0",
+  "description": "Food engineering heat-transfer teaching simulator. Zero runtime dependencies.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "validate": "node test/validate.mjs",
+    "build": "node build.mjs"
+  }
+}

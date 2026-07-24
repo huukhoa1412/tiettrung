@@ -1,0 +1,623 @@
+/* ==========================================================================
+   Heat-Transfer Simulator -- classroom stylesheet
+
+   Priorities, in order:
+     1. Legibility from the back of a lecture hall. Base type is 17px and
+        nothing meaningful is below 15px; key readouts are much larger.
+     2. Contrast. Body text meets WCAG AAA on both themes, controls meet AA.
+     3. Calm. One accent colour, one surface elevation, generous whitespace.
+        A projector flattens subtle distinctions, so there are none.
+
+   Both light and dark are supported: lecture halls are dim (dark wins) but
+   handouts and student laptops are not (light wins).
+   ========================================================================== */
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --step-0: 1.0625rem;  /* 17px base */
+  --step-1: 1.1875rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  --step-4: 2.25rem;
+  --step-sm: 0.9375rem; /* 15px floor */
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --gap: 1rem;
+  --gap-lg: 1.5rem;
+
+  --panel-w: 22rem;
+  --readout-w: 26rem;
+
+  /* Light theme (default) */
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --border: #d3d9e0;
+  --border-strong: #aeb7c2;
+  --text: #14171c;
+  --text-dim: #4d5663;
+  --accent: #0a5fb4;
+  --accent-text: #ffffff;
+  --accent-soft: #e3edf9;
+  --warn: #9a5b00;
+  --warn-soft: #fdf1dd;
+  --danger: #a3231d;
+  --ok: #15683c;
+  --shadow: 0 1px 2px rgba(16, 20, 28, 0.06), 0 4px 14px rgba(16, 20, 28, 0.06);
+
+  /* --- Chart tokens ---------------------------------------------------
+     Categorical slots in fixed order. Colour follows the QUANTITY, never
+     its rank, so a series keeps its hue when others are toggled off.
+     Validated for colourblind separation against this app's own surfaces:
+     worst adjacent CVD dE 9.2 light / 9.4 dark (>= 8 target), worst
+     normal-vision dE 27.6 light / 24.6 dark (>= 15 floor).
+     Aqua measures 2.82:1 on the light surface, below the 3:1 bar, so every
+     chart ships a legend AND endpoint labels rather than relying on hue. */
+  --series-1: #2a78d6;  /* centre temperature / cold stream */
+  --series-2: #eb6834;  /* surface temperature / hot stream */
+  --series-3: #1baf7a;  /* volume-average temperature */
+  --series-4: #4a3aa7;  /* lethality, analytical reference */
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ink-muted: #898781;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1319;
+    --surface: #171c24;
+    --surface-2: #1f2631;
+    --border: #2c3540;
+    --border-strong: #3f4a58;
+    --text: #eef2f7;
+    --text-dim: #a3aebd;
+    --accent: #5aa9f5;
+    --accent-text: #07121e;
+    --accent-soft: #16283c;
+    --warn: #edb464;
+    --warn-soft: #2e2413;
+    --danger: #f28b84;
+    --ok: #63d094;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.35);
+
+    /* Dark steps are re-selected for the dark surface, not flipped. */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #9085e9;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --ink-muted: #898781;
+  }
+}
+
+/* Explicit override wins over the media query, in both directions. */
+:root[data-theme="light"] {
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #4a3aa7;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ink-muted: #898781;
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #eef1f5;
+  --border: #d3d9e0; --border-strong: #aeb7c2;
+  --text: #14171c; --text-dim: #4d5663;
+  --accent: #0a5fb4; --accent-text: #ffffff; --accent-soft: #e3edf9;
+  --warn: #9a5b00; --warn-soft: #fdf1dd; --danger: #a3231d; --ok: #15683c;
+  --shadow: 0 1px 2px rgba(16,20,28,.06), 0 4px 14px rgba(16,20,28,.06);
+}
+:root[data-theme="dark"] {
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #9085e9;
+  --grid: #2c2c2a; --axis: #383835; --ink-muted: #898781;
+  --bg: #0f1319; --surface: #171c24; --surface-2: #1f2631;
+  --border: #2c3540; --border-strong: #3f4a58;
+  --text: #eef2f7; --text-dim: #a3aebd;
+  --accent: #5aa9f5; --accent-text: #07121e; --accent-soft: #16283c;
+  --warn: #edb464; --warn-soft: #2e2413; --danger: #f28b84; --ok: #63d094;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
+}
+
+/* --------------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { color-scheme: light dark; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { line-height: 1.25; margin: 0; font-weight: 650; }
+
+button, input, select { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ============================ App frame ============================== */
+.app {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-lg);
+  padding: 0.75rem 1.25rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand { font-size: var(--step-2); font-weight: 700; letter-spacing: -0.01em; }
+.brand small {
+  display: block;
+  font-size: var(--step-sm);
+  font-weight: 450;
+  color: var(--text-dim);
+  letter-spacing: 0;
+}
+
+.topbar-spacer { flex: 1; }
+
+/* Segmented tab groups, used for both scenario and mode. */
+.tabs { display: flex; gap: 0.25rem; background: var(--surface-2); padding: 0.25rem; border-radius: var(--radius); }
+
+.tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--step-sm);
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms, color 120ms;
+}
+.tab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tab[aria-selected="true"] { background: var(--accent); color: var(--accent-text); }
+
+.scenario-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--step-sm);
+  color: var(--text);
+}
+.scenario-bar strong { font-size: var(--step-1); }
+
+/* ============================ Layout ================================= */
+.workspace {
+  display: grid;
+  grid-template-columns: var(--panel-w) minmax(0, 1fr) var(--readout-w);
+  gap: var(--gap);
+  padding: var(--gap);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.column { min-height: 0; display: flex; flex-direction: column; gap: var(--gap); overflow-y: auto; }
+.column::-webkit-scrollbar { width: 10px; }
+.column::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--gap);
+}
+
+.card > h2 {
+  font-size: var(--step-1);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The stage must NOT be allowed to collapse. It sits in a scrolling column
+   above the plots card; with `min-height: 0` the plots' intrinsic height wins
+   the flex negotiation and squeezes the 3-D view to nothing at real viewport
+   sizes -- the canvas still exists and still renders, so this is invisible to
+   any check that only inspects the DOM. A definite height is the fix. */
+.card-stage {
+  flex: 0 0 auto;
+  height: clamp(26rem, 52vh, 40rem);
+  display: flex; flex-direction: column;
+  padding: 0; overflow: hidden;
+}
+
+/* ========================== Control panel ============================ */
+.control-group { margin-bottom: 1.25rem; }
+.control-group:last-child { margin-bottom: 0; }
+
+.control-group > h3 {
+  font-size: var(--step-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 0.6rem;
+}
+
+.control {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.control-label { font-size: var(--step-sm); font-weight: 550; }
+.control-label .sym { font-style: italic; font-family: var(--font-mono); font-style: normal; }
+.control-unit { font-size: 0.8125rem; color: var(--text-dim); font-weight: 450; }
+
+.control-value {
+  font-family: var(--font-mono);
+  font-size: var(--step-sm);
+  font-weight: 600;
+  text-align: right;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.45rem;
+  width: 7.5rem;
+}
+.control-value:hover { border-color: var(--border-strong); }
+
+.control input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 1.75rem;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.control input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--border);
+}
+.control input[type="range"]::-moz-range-track {
+  height: 6px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--border);
+}
+/* Large hit target: these get dragged live during a lecture. */
+.control input[type="range"]::-webkit-slider-thumb {
+  appearance: none; width: 20px; height: 20px; margin-top: -8px;
+  border-radius: 50%; background: var(--accent); border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.control input[type="range"]::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--surface);
+}
+
+.control-hint {
+  grid-column: 1 / -1;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+  margin: -0.15rem 0 0;
+}
+
+select.control-select, .control-full {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: var(--step-sm);
+}
+
+.radio-row { display: flex; gap: 0.4rem; grid-column: 1 / -1; }
+.radio-row button {
+  flex: 1;
+  padding: 0.45rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 0.875rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.radio-row button[aria-pressed="true"] {
+  background: var(--accent); color: var(--accent-text); border-color: var(--accent);
+}
+
+/* ============================ Readouts =============================== */
+.metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+
+.metric {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.7rem;
+}
+.metric-label {
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  display: flex; justify-content: space-between; gap: 0.5rem;
+}
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: var(--step-3);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.metric-sub { font-size: 0.8125rem; color: var(--text-dim); }
+.metric.is-wide { grid-column: 1 / -1; }
+.metric.is-ok { border-color: var(--ok); }
+.metric.is-warn { background: var(--warn-soft); border-color: var(--warn); }
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.badge-ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.badge-warn { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.badge-info { background: var(--accent-soft); color: var(--accent); }
+
+/* ============================ Equations ============================== */
+.eq-block {
+  margin: 0 0 1.1rem;
+  padding: 0.85rem 0.95rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+.eq-title { font-size: var(--step-sm); font-weight: 650; margin-bottom: 0.5rem; }
+.eq-body { overflow-x: auto; padding: 0.25rem 0; }
+.eq-body math { font-size: 1.2em; }
+.eq-note { font-size: 0.875rem; color: var(--text-dim); margin: 0.55rem 0 0; line-height: 1.5; }
+
+/* ============================ Stage ================================== */
+/* The 3-D viewport is dark in BOTH themes, deliberately.
+   Two reasons, and they outweigh the inconsistency with the surrounding page:
+   white condensing steam is invisible against a light panel, and the rainbow
+   field reads far more strongly against dark than against near-white. Every
+   simulation package renders on a dark viewport for the same reason. The
+   overlay chips carry their own surfaces, so text stays legible. */
+.stage-canvas {
+  flex: 1; min-height: 20rem; position: relative;
+  display: flex; flex-direction: column;
+  background:
+    radial-gradient(120% 90% at 50% 8%, #232c39 0%, #161c25 45%, #0e131a 100%);
+}
+.stage-view { flex: 1; min-height: 0; position: relative; }
+/* Both canvases fill the view; exactly one is visible at a time. */
+.stage-view canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+
+/* Part callouts, positioned by projecting 3-D anchors each frame. */
+.stage-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.stage-label {
+  position: absolute; top: 0; left: 0;
+  padding: 0.1rem 0.4rem; border-radius: 4px;
+  font-size: 0.75rem; font-weight: 650; letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: #e8eef7;
+  background: rgba(10, 15, 22, 0.66);
+  border: 1px solid rgba(180, 200, 225, 0.28);
+  transition: opacity 140ms;
+  /* Hidden until it has been given a real projected position -- otherwise a
+     label that has not yet been placed sits visibly at the top-left corner
+     pointing at nothing. */
+  opacity: 0;
+}
+
+.stage-overlay {
+  position: absolute; inset: auto 0 2.6rem 0;
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 0.75rem; padding: 0 0.75rem; pointer-events: none;
+}
+.stage-caption {
+  font-size: 0.8125rem; color: var(--text-dim);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border-radius: var(--radius-sm); padding: 0.2rem 0.5rem; max-width: 26rem;
+}
+.stage-controls {
+  display: flex; align-items: center; gap: 0.6rem; pointer-events: auto;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0.3rem 0.5rem;
+}
+.stage-ctl { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-dim); font-weight: 600; }
+.stage-ctl input[type="range"] { width: 6.5rem; }
+.stage-check { cursor: pointer; user-select: none; }
+.stage-check input { width: 1rem; height: 1rem; accent-color: var(--accent); cursor: pointer; }
+.stage-ctl select { font-size: 0.8125rem; padding: 0.1rem 0.2rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
+.stage-controls button {
+  font-size: 0.8125rem; font-weight: 600; padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); cursor: pointer; color: var(--text-dim);
+}
+.stage-controls button:hover { border-color: var(--accent); color: var(--accent); }
+
+.stage-colorbar { display: block; width: 100%; height: 2.4rem; flex: none; }
+
+.transport {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.transport button {
+  width: 2.5rem; height: 2.5rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); cursor: pointer; font-size: 1.05rem;
+  display: grid; place-content: center;
+}
+.transport button:hover { border-color: var(--accent); color: var(--accent); }
+.transport input[type="range"] { flex: 1; }
+.transport .time {
+  font-family: var(--font-mono); font-size: var(--step-1);
+  font-weight: 650; min-width: 5.5rem; text-align: right;
+}
+
+/* ============================ Plots ================================== */
+.plot { margin-bottom: 1.4rem; }
+.plot:last-child { margin-bottom: 0; }
+
+.plot-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.5rem; margin-bottom: 0.3rem;
+}
+.plot-title { font-size: var(--step-sm); font-weight: 650; }
+
+.plot-table-toggle {
+  border: 1px solid var(--border); background: var(--surface-2);
+  border-radius: var(--radius-sm); padding: 0.1rem 0.5rem;
+  font-size: 0.75rem; font-weight: 600; color: var(--text-dim); cursor: pointer;
+}
+.plot-table-toggle[aria-expanded="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+.plot-legend { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; margin-bottom: 0.2rem; }
+.plot-key {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.8125rem; color: var(--text-dim); font-weight: 550;
+}
+/* Swatches carry identity; the words stay in ink tokens, never series colour. */
+.plot-swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+.plot-canvas-wrap { position: relative; }
+.plot-canvas-wrap canvas { display: block; width: 100%; touch-action: none; }
+
+.plot-tooltip {
+  position: absolute; pointer-events: none; z-index: 3;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow);
+  padding: 0.4rem 0.55rem; font-size: 0.8125rem; min-width: 9rem;
+}
+.tt-head { font-weight: 650; margin-bottom: 0.25rem; color: var(--text); }
+.tt-row { display: flex; align-items: center; gap: 0.4rem; }
+.tt-label { color: var(--text-dim); flex: 1; }
+.tt-value { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.plot-table { max-height: 15rem; overflow: auto; margin-top: 0.5rem; }
+.plot-table table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.plot-table caption { text-align: left; color: var(--text-dim); font-size: 0.75rem; padding-bottom: 0.3rem; }
+.plot-table th, .plot-table td {
+  text-align: right; padding: 0.15rem 0.4rem;
+  border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums;
+}
+.plot-table th { color: var(--text-dim); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+.plot-table td:first-child, .plot-table th:first-child { text-align: left; }
+
+/* ======================= Learn / Quiz / Compare ====================== */
+.teach-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem; margin-bottom: 0.5rem;
+}
+.teach-head select {
+  flex: 1; padding: 0.35rem 0.4rem; font-size: var(--step-sm); font-weight: 600;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.teach-progress { font-size: 0.8125rem; color: var(--text-dim); white-space: nowrap; }
+.teach-concept {
+  font-size: 0.8125rem; color: var(--text-dim); margin: 0 0 0.75rem;
+  padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+}
+.teach-body h4 { font-size: var(--step-1); margin: 0 0 0.5rem; }
+.teach-body p { margin: 0 0 0.7rem; line-height: 1.55; }
+.teach-question { font-weight: 600; }
+.teach-hint { font-size: 0.8125rem; color: var(--text-dim); font-style: italic; }
+
+.teach-options { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.8rem; }
+.teach-option {
+  text-align: left; padding: 0.55rem 0.7rem; font-size: var(--step-sm);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); cursor: pointer; line-height: 1.4;
+}
+.teach-option:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.teach-option:disabled { cursor: default; opacity: 0.75; }
+/* State is carried by a border, a tint AND a leading glyph — never colour alone. */
+.teach-option[data-state="correct"] {
+  border-color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); opacity: 1;
+}
+.teach-option[data-state="correct"]::before { content: "✓ "; font-weight: 700; color: var(--ok); }
+.teach-option[data-state="wrong"] {
+  border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); opacity: 1;
+}
+.teach-option[data-state="wrong"]::before { content: "✕ "; font-weight: 700; color: var(--danger); }
+
+.teach-reveal {
+  border-left: 4px solid var(--accent); background: var(--surface-2);
+  padding: 0.7rem 0.8rem; border-radius: var(--radius-sm); font-size: var(--step-sm);
+}
+.teach-reveal.is-correct { border-left-color: var(--ok); }
+.teach-reveal.is-wrong { border-left-color: var(--warn); }
+.teach-reveal p { margin: 0.4rem 0 0; }
+.teach-reveal p:first-of-type { margin-top: 0.3rem; }
+
+.teach-nav { display: flex; gap: 0.5rem; margin-top: 0.9rem; }
+.teach-nav button {
+  flex: 1; padding: 0.5rem 0.7rem; font-size: var(--step-sm); font-weight: 600;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); cursor: pointer;
+}
+.teach-nav button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.teach-nav button:disabled { opacity: 0.45; cursor: default; }
+
+.quiz-score { font-size: var(--step-4); font-weight: 700; line-height: 1.1; }
+.quiz-score span { font-size: var(--step-1); color: var(--text-dim); font-weight: 500; }
+
+.compare-table { width: 100%; border-collapse: collapse; font-size: var(--step-sm); }
+.compare-table th, .compare-table td {
+  text-align: right; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.compare-table thead th { color: var(--text-dim); font-size: 0.8125rem; }
+.compare-table tbody th { text-align: left; font-weight: 550; color: var(--text-dim); }
+.compare-table .delta { font-family: var(--font-mono); font-weight: 650; }
+.compare-table .compare-label td { font-size: 0.8125rem; color: var(--text-dim); text-align: right; }
+
+/* ============================ Utilities ============================== */
+.note {
+  font-size: 0.875rem; color: var(--text-dim);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.6rem 0.7rem;
+}
+.note-warn { background: var(--warn-soft); border-color: var(--warn); color: var(--text); }
+.cite { font-size: 0.8125rem; color: var(--text-dim); }
+.cite a { color: var(--accent); }
+[hidden] { display: none !important; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* ============================ Responsive ============================= */
+@media (max-width: 1400px) {
+  :root { --panel-w: 20rem; --readout-w: 22rem; }
+}
+@media (max-width: 1100px) {
+  .workspace { grid-template-columns: 1fr; overflow-y: auto; }
+  .column { overflow: visible; }
+  .card-stage { min-height: 26rem; }
+  .app { height: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

@@ -1,0 +1,11 @@
+# Distribution bundle — regenerated from the build, not source
+share/
+*.zip
+
+# The built single-file app IS tracked on purpose: it is the deliverable, and
+# GitHub Pages serves it directly. Do not add it here.
+
+node_modules/
+.DS_Store
+Thumbs.db
+*.log

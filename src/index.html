@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heat-Transfer Simulator — Food Engineering</title>
+<meta name="description" content="Interactive transient conduction, freezing and heat-exchanger simulator for undergraduate food engineering.">
+<link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      Heat-Transfer Simulator
+      <small>Undergraduate food engineering</small>
+    </div>
+
+    <nav class="tabs" id="scenario-tabs" role="tablist" aria-label="Process scenario"></nav>
+
+    <div class="topbar-spacer"></div>
+
+    <nav class="tabs" id="mode-tabs" role="tablist" aria-label="Mode"></nav>
+
+    <button class="tab" id="theme-toggle" type="button" title="Switch between light and dark">
+      Theme
+    </button>
+  </header>
+
+  <div class="scenario-bar">
+    <strong id="scenario-title">—</strong>
+    <span id="scenario-blurb"></span>
+  </div>
+
+  <main class="workspace">
+
+    <!-- ---------------- Controls ---------------- -->
+    <section class="column" aria-label="Controls">
+      <div class="card">
+        <h2>Controls</h2>
+        <div id="control-panel"></div>
+      </div>
+    </section>
+
+    <!-- ---------------- Stage ---------------- -->
+    <section class="column" aria-label="Visualisation">
+      <div class="card card-stage">
+        <div class="stage-canvas" id="stage"></div>
+        <div class="transport">
+          <button id="play" type="button" aria-label="Play or pause">▶</button>
+          <input type="range" id="scrub" min="0" max="240" value="0" aria-label="Time">
+          <span class="time" id="clock">00:00</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Plots</h2>
+        <div id="plots"></div>
+      </div>
+    </section>
+
+    <!-- ---------------- Readouts ---------------- -->
+    <section class="column" aria-label="Results">
+      <div class="card">
+        <h2>Live results</h2>
+        <div class="metrics" id="metrics"></div>
+        <p class="note" id="solve-note" style="margin-top:0.85rem"></p>
+      </div>
+
+      <div class="card" id="teach-card" hidden>
+        <h2 id="teach-title">Learn</h2>
+        <div id="teach-panel"></div>
+      </div>
+
+      <div class="card">
+        <h2>Governing equations</h2>
+        <div id="equations"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
