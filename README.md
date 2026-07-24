@@ -11,11 +11,29 @@ no build required to run it, no network access at any point.
 
 ## Running it
 
-Double-click **`heat-transfer-simulator.html`**.
+### Easiest — just open the link
 
-That is the whole procedure. It opens in any current browser, works from a USB
-stick or a learning-management system, and never contacts the network. Nothing
-to install, no server, no npm.
+**https://zhouxu-lab.github.io/Teaching-food-engineering-heat-transfer/**
+
+Nothing to download, nothing to install. Works on any computer, tablet or
+phone, and on any current browser.
+
+### Offline — from the file
+
+Download **`heat-transfer-simulator.html`**, then
+**right-click it → Open with → Chrome, Edge, Firefox or Safari.**
+
+> **Do not rely on double-clicking.** Windows frequently has `.html` associated
+> with Internet Explorer or a text editor rather than a real browser, and
+> **Internet Explorer cannot run this app** — it supports neither WebGL2, nor
+> modern JavaScript, nor MathML, so you get a blank or broken page. This is a
+> file-association problem on the computer, not a problem with the file.
+>
+> To fix it permanently: right-click the file → *Open with* → *Choose another
+> app* → pick your browser → tick **Always use this app**.
+
+Once it is open it needs no network at all, so it runs from a USB stick or a
+lecture-theatre machine with no internet.
 
 ### Rebuilding it after editing
 

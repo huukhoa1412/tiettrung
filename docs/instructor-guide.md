@@ -1,5 +1,12 @@
 # Instructor guide — one page
 
+**Open it:** https://zhouxu-lab.github.io/Teaching-food-engineering-heat-transfer/
+
+Offline instead? Right-click `heat-transfer-simulator.html` → *Open with* → your
+browser. Do not double-click it: Windows often opens `.html` in Internet
+Explorer, which cannot run the app.
+
+
 ## Lesson-to-concept map
 
 | # | Lesson | Concept delivered | The moment that lands it |
