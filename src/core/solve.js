@@ -14,13 +14,28 @@ import { cumulativeLethality, timeToReach } from '../physics/lethality.js';
 import { plankFreezingTime, latentHeatOfFood, frozenFraction, frontPosition } from '../physics/freezing.js';
 import { solveExchanger, holdingTube } from '../physics/exchanger.js';
 
-/** Relative residual of the closed energy balance, for display. */
+/**
+ * Relative residual of the closed energy balance, for display.
+ *
+ * The denominator has to be the problem's own energy SCALE, not the heat that
+ * happened to cross the surface. When the food starts at the medium
+ * temperature nothing flows: `through` is legitimately ~0, and dividing by it
+ * turned a solution that is exact into a reported 100 % error. The guard is
+ * therefore on the driving potential, and the denominator carries a floor set
+ * by the total heat capacity of the food times a one-kelvin change -- the
+ * smallest energy the problem can meaningfully resolve.
+ */
 function energyResidual(sol) {
   const n = sol.nFrames;
   const stored = sol.energyStored[n] - sol.energyStored[0];
   const through = sol.energyThroughSurface[n];
-  if (!Number.isFinite(through) || Math.abs(through) < 1e-12) return 0;
-  return Math.abs(stored - through) / Math.abs(through);
+  if (!Number.isFinite(through) || !Number.isFinite(stored)) return 0;
+
+  // energyStored[0] is measured against Tinf, so its magnitude IS the food's
+  // capacity times the initial driving temperature difference.
+  const scale = Math.max(Math.abs(through), Math.abs(sol.energyStored[0]) * 1e-6);
+  if (scale < 1e-12) return 0; // no driving potential: nothing to balance
+  return Math.abs(stored - through) / scale;
 }
 
 /* ------------------------------------------------------------------ */

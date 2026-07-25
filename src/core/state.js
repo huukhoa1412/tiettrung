@@ -9,11 +9,23 @@
  * invalidates the physics" -- which is about forty lines.
  */
 
-/** Parameters that require a full re-solve when they change. */
+/**
+ * Parameters that require a full re-solve when they change.
+ *
+ * Anything the SOLVER reads must be listed here. A key that the solver reads
+ * but that is missing from this set produces the worst kind of bug: the
+ * control moves, the interface repaints, and the numbers silently keep their
+ * previous values — so the tool looks like it is working while telling the
+ * student something untrue.
+ *
+ * `targetF0` is here because solveRetort computes timeToTarget from it;
+ * `nFrames` and `meshN` because they set the discretisation.
+ */
 const PHYSICS_KEYS = new Set([
   'scenario', 'geometry', 'radius', 'halfThickness', 'canHeight',
-  'k', 'rho', 'cp', 'h', 'Tinitial', 'Tmedium', 'processTime', 'meshN',
-  'Tref', 'zValue',
+  'k', 'rho', 'cp', 'h', 'heatingMedium', 'Tinitial', 'Tmedium', 'processTime',
+  'meshN', 'nFrames',
+  'Tref', 'zValue', 'targetF0',
   'kFrozen', 'rhoFrozen', 'cpFrozen', 'freezingPoint', 'waterFraction',
   'boundWaterFraction', 'chillMedium', 'chillH',
   'mdotHot', 'cpHot', 'ThotIn', 'mdotCold', 'cpCold', 'TcoldIn',
@@ -52,7 +64,6 @@ export const GEOMETRIES = {
 export function defaultState() {
   return {
     scenario: 'retort',
-    mode: 'explore', // explore | learn | quiz | compare
 
     // --- Geometry ---
     geometry: 'finiteCylinder',

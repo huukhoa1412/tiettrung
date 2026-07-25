@@ -339,43 +339,103 @@ select.control-select, .control-full {
 }
 
 /* ============================ Readouts =============================== */
-.metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
 
-.metric {
+.tile-section {
+  grid-column: 1 / -1;
+  font-size: 0.75rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-dim);
+  margin: 0.55rem 0 -0.1rem;
+}
+.tile-section:first-child { margin-top: 0; }
+
+.tile {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 0.6rem 0.7rem;
+  padding: 0.55rem 0.7rem 0.6rem;
+  min-width: 0;
+  transition: border-color 140ms, background 140ms;
 }
-.metric-label {
-  font-size: 0.8125rem;
-  color: var(--text-dim);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  display: flex; justify-content: space-between; gap: 0.5rem;
+.tile-span2 { grid-column: 1 / -1; }
+
+.tile-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.5rem; margin-bottom: 0.15rem;
 }
-.metric-value {
-  font-family: var(--font-mono);
-  font-size: var(--step-3);
-  font-weight: 650;
-  line-height: 1.15;
+.tile-label {
+  font-size: 0.8125rem; font-weight: 600; color: var(--text-dim);
+  letter-spacing: 0.01em;
+}
+.tile-value {
+  font-size: var(--step-3); font-weight: 650; line-height: 1.1;
   letter-spacing: -0.02em;
+  /* Proportional figures: tabular-nums makes a large standalone number look
+     loose and gappy. Alignment only matters in columns, and these are tiles. */
+  display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap;
 }
-.metric-sub { font-size: 0.8125rem; color: var(--text-dim); }
-.metric.is-wide { grid-column: 1 / -1; }
-.metric.is-ok { border-color: var(--ok); }
-.metric.is-warn { background: var(--warn-soft); border-color: var(--warn); }
+.tile-unit { font-size: var(--step-0); font-weight: 550; color: var(--text-dim); }
+.tile-sub { font-size: 0.8125rem; color: var(--text-dim); line-height: 1.45; margin-top: 0.2rem; }
+.tile-sub strong { color: var(--text); font-weight: 650; }
+
+/* The headline tile: the number the process exists to produce. */
+.tile-hero { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.tile-hero .tile-value { font-size: var(--step-4); }
+.tile-ok { border-color: var(--ok); }
+.tile-warn { background: var(--warn-soft); border-color: var(--warn); }
+
+/* Hovering a tile lights up the same symbol in the equations and its slider. */
+.tile[data-sym]:hover { border-color: var(--accent); background: var(--accent-soft); cursor: help; }
+/* ...and the reverse: hovering the slider lights up the tile it produces. */
+.tile[data-sym].is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* ---- regime gauge: reads the value as a POSITION, not just a number ---- */
+.gauge { margin: 0.4rem 0 0.15rem; }
+.gauge-track {
+  position: relative; height: 8px; border-radius: 4px;
+  background: var(--surface); border: 1px solid var(--border); overflow: hidden;
+}
+.gauge-zone { position: absolute; top: 0; bottom: 0; }
+.gauge-ok  { background: color-mix(in srgb, var(--ok) 32%, transparent); }
+.gauge-mid { background: color-mix(in srgb, var(--warn) 30%, transparent); }
+.gauge-hot { background: color-mix(in srgb, var(--danger) 30%, transparent); }
+.gauge-mark {
+  position: absolute; top: -3px; width: 3px; height: 14px;
+  background: var(--text); border-radius: 2px;
+  transform: translateX(-1.5px);
+  box-shadow: 0 0 0 2px var(--surface-2);
+}
+.gauge-scale {
+  display: flex; justify-content: space-between;
+  font-size: 0.6875rem; color: var(--ink-muted); margin-top: 0.15rem;
+}
+
+/* ---- progress bar, for F0 against target and effectiveness ---- */
+.progress {
+  height: 8px; border-radius: 4px; margin: 0.4rem 0 0.15rem;
+  background: var(--surface); border: 1px solid var(--border); overflow: hidden;
+}
+.progress > span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.tile-ok .progress > span { background: var(--ok); }
+.tile-warn .progress > span { background: var(--warn); }
+.progress-split > span { background: var(--accent); }
 
 .badge {
   display: inline-block;
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 .badge-ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
-.badge-warn { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.badge-warn { background: color-mix(in srgb, var(--warn) 24%, transparent); color: var(--warn); }
 .badge-info { background: var(--accent-soft); color: var(--accent); }
 
 /* ============================ Equations ============================== */
@@ -386,11 +446,66 @@ select.control-select, .control-full {
   border: 1px solid var(--border);
   border-left: 4px solid var(--accent);
   border-radius: var(--radius-sm);
+  transition: border-color 140ms, background 140ms, box-shadow 140ms;
 }
 .eq-title { font-size: var(--step-sm); font-weight: 650; margin-bottom: 0.5rem; }
 .eq-body { overflow-x: auto; padding: 0.25rem 0; }
 .eq-body math { font-size: 1.2em; }
 .eq-note { font-size: 0.875rem; color: var(--text-dim); margin: 0.55rem 0 0; line-height: 1.5; }
+
+/* The compact equation shown inline inside a control group, so the maths sits
+   beside the sliders that drive it instead of in a separate column. */
+.group-eq { margin: 0 0 0.85rem; }
+.eq-compact {
+  margin: 0;
+  padding: 0.45rem 0.5rem;
+  border-left-width: 3px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-2));
+}
+.eq-compact .eq-body { padding: 0; }
+.eq-compact .eq-body math { font-size: 1.05em; }
+
+/* ---------------------------------------------------------------------
+   SYMBOL HIGHLIGHTING — the link between a slider and the maths.
+
+   Every symbol in every equation is tagged with the parameter that drives it.
+   Hovering or focusing a control lights up that symbol everywhere it appears,
+   and lifts the equations that contain it. This is the whole mechanism for
+   answering "which letter am I actually changing?".
+
+   The highlight is a background chip plus a weight change, not colour alone,
+   so it survives colour-vision deficiency and greyscale projection.
+   --------------------------------------------------------------------- */
+.sym {
+  border-radius: 3px;
+  padding: 0 0.06em;
+  transition: background 120ms, color 120ms, outline-color 120ms;
+}
+.sym.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.eq-block.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* The control being hovered lifts too, so the pair reads as one object. */
+.control.is-active {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.card-hint {
+  display: block;
+  font-size: 0.75rem; font-weight: 450;
+  color: var(--text-dim); letter-spacing: 0;
+  margin-top: 0.15rem;
+}
 
 /* ============================ Stage ================================== */
 /* The 3-D viewport is dark in BOTH themes, deliberately.

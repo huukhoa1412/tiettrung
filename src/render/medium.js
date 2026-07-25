@@ -155,8 +155,13 @@ export function buildMediumParticles(spec, seedValue = 20260723, origins = null)
  * rather than hard-coding a colour means that when the map changes, the steam
  * still visibly belongs to the same scale as the food.
  */
-export function mediumColor(sampleFn, colormap, whiteness, alpha) {
-  const [r, g, b] = sampleFn(colormap, 1.0);
+export function mediumColor(sampleFn, colormap, whiteness, alpha, position = 1) {
+  // `position` is where the MEDIUM sits on the temperature scale, not a
+  // constant. It used to be hard-coded to 1.0 -- the hot end -- so when a
+  // student set the food hotter than the retort (making the medium the cold
+  // boundary) the steam was still tinted as if it were the hottest thing in
+  // the picture, contradicting the colour bar directly beneath it.
+  const [r, g, b] = sampleFn(colormap, Math.min(1, Math.max(0, position)));
   const w = whiteness;
   return [r + (1 - r) * w, g + (1 - g) * w, b + (1 - b) * w, alpha];
 }

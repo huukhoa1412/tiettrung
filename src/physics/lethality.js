@@ -27,6 +27,27 @@
 /** Standard basis for low-acid canned foods (C. botulinum). */
 export const F0_BASIS = { Tref: 121.1, z: 10.0 };
 
+/**
+ * Is this lethality on the standard F0 basis?
+ *
+ * The symbol F0 is not a generic name for accumulated lethality: it means
+ * SPECIFICALLY Tref = 121.1 C with z = 10 C. Both are exposed as sliders here,
+ * so a student can move off that basis in one drag -- at which point the
+ * quantity is still a perfectly good F-value, but calling it F0 is wrong, and
+ * quietly wrong in a way that would carry into their coursework.
+ *
+ * Compared with a tolerance rather than by equality, because the sliders carry
+ * finite steps and floating-point values.
+ */
+export function isF0Basis(Tref, z) {
+  return Math.abs(Tref - F0_BASIS.Tref) < 0.05 && Math.abs(z - F0_BASIS.z) < 0.05;
+}
+
+/** The correct display name for a lethality on this basis. */
+export function lethalityLabel(Tref, z) {
+  return isF0Basis(Tref, z) ? 'F₀' : `F<sub>${Tref.toFixed(1)}/${z.toFixed(0)}</sub>`;
+}
+
 /** Reference D-value at 121.1 C for C. botulinum spores, minutes. */
 export const D121_BOTULINUM = 0.25;
 

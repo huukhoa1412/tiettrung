@@ -297,6 +297,29 @@ export function presetProperties(id) {
 }
 
 /**
+ * Exactly the values `applyPreset` would write for this preset.
+ *
+ * Exposed so the interface can tell whether the properties on screen still
+ * ARE the preset's, and stop showing a source citation once they are not.
+ * Rounded identically to applyPreset so the comparison is exact rather than
+ * approximate.
+ */
+export function presetAppliedValues(id) {
+  const { preset, unfrozen, frozen } = presetProperties(id);
+  return {
+    k: round(unfrozen.k, 4),
+    rho: round(unfrozen.rho, 1),
+    cp: round(unfrozen.cp, 1),
+    kFrozen: round(frozen.k, 4),
+    rhoFrozen: round(frozen.rho, 1),
+    cpFrozen: round(frozen.cp, 1),
+    waterFraction: preset.composition.water ?? 0,
+    boundWaterFraction: round(boundWaterOfWater(preset.composition), 3),
+    freezingPoint: preset.freezingPoint,
+  };
+}
+
+/**
  * Apply a preset to the store.
  *
  * Note this sets the SOLID-food properties only. The milk line's cold-stream

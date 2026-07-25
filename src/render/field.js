@@ -106,6 +106,24 @@ export function buildFieldImage(result, frame, state, colormap, width = 128, hei
     rowCache.push({ row, rowCentre, rowSurface });
   }
 
+  // The LID temperature, reconstructed the same way as the side wall but in
+  // the axial direction. Without this the top of the can is drawn from the
+  // last cell CENTRE, half a cell in from the lid, so the lids appeared far
+  // colder than the side wall on the same can -- worst exactly where h is
+  // high, which is the default. The lids are heated by the same medium and
+  // must reach the same surface temperature.
+  const gz = (2 * state.k) / mesh.dz;
+  const hS = state.scenario === 'chill' ? state.chillH : state.h;
+  const Tinf2 = state.scenario === 'chill' ? state.chillMedium : state.Tmedium;
+  const lid = new Float64Array(Nr);
+  for (let i = 0; i < Nr; i++) {
+    const top = result.at(f, i, Nz - 1);
+    lid[i] = f === 0 || hS <= 0 ? top : (hS * Tinf2 + gz * top) / (hS + gz);
+  }
+  const lidCentre = lid[0] - (lid[1] - lid[0]) / 8;
+  const lidSurface =
+    f === 0 || hS <= 0 ? lid[Nr - 1] : (hS * Tinf2 + ((2 * state.k) / mesh.dr) * lid[Nr - 1]) / (hS + (2 * state.k) / mesh.dr);
+
   for (let jy = 0; jy < height; jy++) {
     // v = 0 is the mid-height plane (the cold spot), v = 1 is the lid.
     const v = jy / (height - 1);
@@ -113,6 +131,9 @@ export function buildFieldImage(result, frame, state, colormap, width = 128, hei
     const j0 = Math.max(0, Math.min(Nz - 1, Math.floor(zx)));
     const j1 = Math.max(0, Math.min(Nz - 1, j0 + 1));
     const fz = Math.max(0, Math.min(1, zx - j0));
+    // Past the last cell centre, blend on to the reconstructed lid rather than
+    // holding the last interior value.
+    const toLid = Math.max(0, Math.min(1, (zx - (Nz - 1)) / 0.5));
 
     for (let i = 0; i < width; i++) {
       const s = i / (width - 1);
@@ -120,7 +141,12 @@ export function buildFieldImage(result, frame, state, colormap, width = 128, hei
       const b = rowCache[j1];
       const Ta = sampleRadial(a.row, a.rowCentre, a.rowSurface, Nr, s);
       const Tb = sampleRadial(b.row, b.rowCentre, b.rowSurface, Nr, s);
-      write(jy * width + i, Ta + (Tb - Ta) * fz);
+      let T = Ta + (Tb - Ta) * fz;
+      if (toLid > 0) {
+        const Tlid = sampleRadial(lid, lidCentre, lidSurface, Nr, s);
+        T = T + (Tlid - T) * toLid;
+      }
+      write(jy * width + i, T);
     }
   }
 

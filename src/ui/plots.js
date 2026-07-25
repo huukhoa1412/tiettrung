@@ -14,6 +14,7 @@
 
 import { LinePlot, seriesColor } from './plot.js';
 import { analyticalSolution, finiteCylinderProduct } from '../physics/analytical.js';
+import { isF0Basis } from '../physics/lethality.js';
 
 /** Down-sample a frame series to keep the tooltip's nearest-point search cheap. */
 function thin(times, values, maxPoints = 300) {
@@ -130,15 +131,21 @@ function renderConduction(ensure, slots, state, der, result, baseline = null) {
   // --- 3. Dimensionless theta, log scale, against the exact solution --
   // On a log axis the single-term regime is a straight line, which is exactly
   // the point: after Fo ~ 0.2 all the higher eigenmodes have died away.
+  // theta is undefined when the food starts AT the medium temperature: there
+  // is no transient to normalise against. Drawing zeros would put a flat line
+  // on the axis floor and imply the centre never responds, so the whole plot
+  // is suppressed and says why.
   const span = state.Tinitial - state.Tmedium;
+  const degenerate = Math.abs(span) < 1e-9;
+
   const theta = new Float64Array(result.nFrames + 1);
   for (let i = 0; i <= result.nFrames; i++) {
-    theta[i] = span !== 0 ? (result.Tcenter[i] - state.Tmedium) / span : 0;
+    theta[i] = degenerate ? NaN : (result.Tcenter[i] - state.Tmedium) / span;
   }
   const foAxis = new Float64Array(result.nFrames + 1);
   for (let i = 0; i <= result.nFrames; i++) foAxis[i] = der.Fo(result.times[i]);
 
-  const exact = exactCentre(state, der, result);
+  const exact = degenerate ? null : exactCentre(state, der, result);
   const tn = thin(foAxis, theta);
   const series = [{ id: 'numeric', label: 'Numerical', color: seriesColor(1), x: tn.x, y: tn.y }];
   if (exact) {
@@ -148,57 +155,98 @@ function renderConduction(ensure, slots, state, der, result, baseline = null) {
       x: en.x, y: en.y, dash: [6, 4], width: 2,
     });
   }
+
+  // The y-axis floor follows the data instead of being pinned at 1e-3. A long
+  // process drives theta well below 1e-3, and a fixed floor drew the tail as a
+  // flat line along the bottom of the frame -- which looks like the centre
+  // stops approaching the medium, the precise opposite of what is happening.
+  // Bounded to five decades so the frame stays readable.
+  let thMin = Infinity;
+  for (const ser of series) {
+    for (const v of ser.y) if (Number.isFinite(v) && v > 0 && v < thMin) thMin = v;
+  }
+  const floor = Number.isFinite(thMin)
+    ? Math.max(Math.pow(10, Math.floor(Math.log10(thMin))), 1e-6)
+    : 1e-3;
+
   slots.get('theta').setData({
-    title: 'Dimensionless centre temperature θ (log scale)',
+    title: degenerate
+      ? 'Dimensionless θ — undefined when Tᵢ = T∞ (no temperature difference to scale by)'
+      : 'Dimensionless centre temperature θ (log scale)',
     xLabel: 'Fourier number Fo', yLabel: 'θ = (T−T∞)/(Tᵢ−T∞)',
     xScale: 'lin', yScale: 'log',
-    yDomain: [1e-3, 1.2],
+    yDomain: [Math.min(floor, 1e-3), 1.2],
     series,
   });
 
   // --- 4. Lethality --------------------------------------------------
   if (result.lethality) {
+    // The plot must not call this F₀ unless it is on the F₀ basis; see the
+    // note in physics/lethality.js.
+    const Fname = isF0Basis(state.Tref, state.zValue)
+      ? 'F₀'
+      : `F(${state.Tref.toFixed(1)} °C, z=${state.zValue.toFixed(1)})`;
     const f = thin(tMin, result.lethality.F);
-    const markers = [{ axis: 'y', value: state.targetF0, label: `target F₀ = ${state.targetF0}`, color: seriesColor(2) }];
+    const markers = [
+      { axis: 'y', value: state.targetF0, label: `target = ${state.targetF0} min`, color: seriesColor(2) },
+    ];
     if (result.lethality.timeToTarget !== null) {
       markers.push({ axis: 'x', value: result.lethality.timeToTarget / 60, label: 'target met', color: seriesColor(2) });
     }
     slots.get('f0').setData({
-      title: 'Accumulated lethality F₀ at the cold spot',
+      title: `Accumulated lethality ${Fname} at the cold spot`,
       xLabel: 'Time', xUnit: ' min',
-      yLabel: 'F₀ (equivalent min)', yUnit: ' min',
+      yLabel: `${Fname} (equivalent min)`, yUnit: ' min',
       xScale: 'lin', yScale: 'lin',
-      series: [{ id: 'f0', label: 'F₀', color: seriesColor(4), x: f.x, y: f.y }],
+      series: [{ id: 'f0', label: Fname, color: seriesColor(4), x: f.x, y: f.y }],
       markers,
     });
   }
 }
 
-/** Radial (or through-thickness) temperature profile for the scrubbed frame. */
+/**
+ * Radial (or through-thickness) temperature profile for the scrubbed frame.
+ *
+ * The mesh is CELL-CENTRED, so its first and last samples sit half a cell in
+ * from the axis and half a cell in from the surface. Plotting only those made
+ * the curve stop short of the wall, and the value at its right-hand end was
+ * the last cell centre rather than the surface -- disagreeing with the surface
+ * temperature shown in the readout and in the 3-D view by up to about 13 K at
+ * high Biot number, which is exactly where a student would be looking.
+ *
+ * Both ends are therefore reconstructed the same way the solver reconstructs
+ * them: the centre by the symmetry extrapolation, the surface from the
+ * convective flux balance the solver already evaluates each frame.
+ */
 function spatialProfile(state, result, frame) {
-  if (result.Nr !== undefined) {
-    // Finite cylinder: take the radial line at mid-height, the plane the cold
-    // spot actually lives on.
-    const { Nr, mesh } = result;
-    const x = new Float64Array(Nr);
-    const y = new Float64Array(Nr);
-    for (let i = 0; i < Nr; i++) {
-      x[i] = mesh.rc[i] * 1000;
-      y[i] = result.at(frame, i, 0);
-    }
-    return { x, y, xLabel: 'Radius from the axis, at mid-height' };
-  }
-  const N = result.N;
-  const field = result.frame(frame);
-  const x = new Float64Array(N);
-  const y = new Float64Array(N);
+  const twoD = result.Nr !== undefined;
+  const N = twoD ? result.Nr : result.N;
+  const mesh = twoD ? result.mesh : result.mesh;
+  const cell = (i) => (twoD ? result.at(frame, i, 0) : result.frame(frame)[i]);
+
+  // N interior samples plus the reconstructed centre and surface.
+  const x = new Float64Array(N + 2);
+  const y = new Float64Array(N + 2);
+
+  x[0] = 0;
+  y[0] = result.Tcenter[frame];
   for (let i = 0; i < N; i++) {
-    x[i] = result.mesh.rc[i] * 1000;
-    y[i] = field[i];
+    x[i + 1] = mesh.rc[i] * 1000;
+    y[i + 1] = cell(i);
   }
+  // The outer face. For the can this is the side wall at mid-height, which is
+  // precisely the row `Tsurface` is computed from.
+  x[N + 1] = (twoD ? mesh.R ?? mesh.rf[N] : mesh.rf[N]) * 1000;
+  y[N + 1] = result.Tsurface[frame];
+
   return {
-    x, y,
-    xLabel: state.geometry === 'slab' ? 'Distance from the mid-plane' : 'Radius from the centre',
+    x,
+    y,
+    xLabel: twoD
+      ? 'Radius from the axis, at mid-height'
+      : state.geometry === 'slab'
+        ? 'Distance from the mid-plane'
+        : 'Radius from the centre',
   };
 }
 
@@ -210,6 +258,20 @@ function spatialProfile(state, result, frame) {
 function exactCentre(state, der, result) {
   try {
     const out = new Float64Array(result.nFrames + 1);
+
+    // 200 terms, not 40.
+    //
+    // This curve is the app's own VALIDATION overlay: it exists so a student
+    // can see the numerical solution lying on top of the analytical one. With
+    // 40 terms the series is badly truncated at small Fourier number -- at the
+    // default Bi of about 436 it started roughly 11 % below the numerical
+    // curve and disagreed by far more during the early transient. A truncated
+    // reference makes the correct solver look wrong, which is worse than
+    // showing no reference at all. The eigenvalues are computed once per
+    // render and the term loop exits as soon as the exponential underflows,
+    // so the extra terms cost little.
+    const TERMS = 200;
+
     if (state.geometry === 'finiteCylinder') {
       const prod = finiteCylinderProduct({
         R: state.radius,
@@ -217,14 +279,21 @@ function exactCentre(state, der, result) {
         k: state.k,
         alpha: der.alpha,
         h: der.h,
-        nTerms: 40,
+        nTerms: TERMS,
       });
       for (let i = 0; i <= result.nFrames; i++) out[i] = prod.thetaCenter(result.times[i]);
     } else {
       const L = state.geometry === 'slab' ? state.halfThickness : state.radius;
-      const sol = analyticalSolution(state.geometry, (der.h * L) / state.k, 40);
+      const sol = analyticalSolution(state.geometry, (der.h * L) / state.k, TERMS);
       for (let i = 0; i <= result.nFrames; i++) out[i] = sol.thetaCenter((der.alpha * result.times[i]) / (L * L));
     }
+
+    // theta(Fo = 0) = 1 by definition of the initial condition. No finite
+    // series reproduces a step exactly, so the value is asserted rather than
+    // summed -- otherwise the overlay visibly starts below 1 at t = 0, which
+    // reads as the reference disagreeing with the initial condition.
+    if (result.times[0] === 0) out[0] = 1;
+
     return out;
   } catch {
     return null;

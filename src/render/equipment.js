@@ -218,11 +218,35 @@ export class PartBuilder {
  * `extent` is the food's own half-size in world units before normalisation, so
  * the vessel is always proportioned to whatever food is loaded.
  */
-/** Inner clear radius and vertical span of the retort, shared with the medium. */
-export const RETORT_BOUNDS = { radius: 1.85, yBottom: -1.6, yTop: 1.7, waterLevel: 1.35 };
+/**
+ * The retort's inner clear radius and vertical span, in scene units.
+ *
+ * Real hardware has a FIXED bore, and that is the default here: at ordinary
+ * can sizes the vessel stays put while the food visibly grows or shrinks
+ * inside it, which is exactly the comparison the size sliders are for. The
+ * vessel only grows once the food would otherwise burst through the wall, so
+ * the extremes of the slider range still produce a sensible picture rather
+ * than a can sticking through a retort.
+ */
+const RETORT_MIN_BORE = 1.85;
+
+export function retortBounds(foodRadius = 0, foodHalfHeight = 0) {
+  const radius = Math.max(RETORT_MIN_BORE, foodRadius * 1.35);
+  const halfSpan = Math.max(1.65, foodHalfHeight * 1.3);
+  return {
+    radius,
+    yBottom: -halfSpan,
+    yTop: halfSpan + 0.1,
+    waterLevel: halfSpan * 0.8,
+  };
+}
+
+/** Default bounds, for callers that only need the nominal vessel. */
+export const RETORT_BOUNDS = retortBounds();
 
 /** Heights of the nozzle rows on the chamber wall. */
-const NOZZLE_ROWS = [-1.0, -0.1, 0.8];
+// Fractions of the vessel half-height, so the rows track a resized vessel.
+const NOZZLE_ROWS = [-0.6, -0.06, 0.47];
 const NOZZLES_PER_ROW = 8;
 
 /**
@@ -238,10 +262,11 @@ const NOZZLES_PER_ROW = 8;
  * Direction is not stored: it is exactly radially inward, so the shader derives
  * it from the position and no attribute is wasted on it.
  */
-export function retortNozzles() {
+export function retortNozzles(bounds = RETORT_BOUNDS) {
   const out = [];
-  const r = RETORT_BOUNDS.radius * 0.965;
-  NOZZLE_ROWS.forEach((y, row) => {
+  const r = bounds.radius * 0.965;
+  const rows = NOZZLE_ROWS.map((f) => f * bounds.yTop);
+  rows.forEach((y, row) => {
     for (let i = 0; i < NOZZLES_PER_ROW; i++) {
       // Alternate rows are staggered so the fans interleave vertically rather
       // than stacking into corridors.
@@ -252,21 +277,34 @@ export function retortNozzles() {
   return out;
 }
 
-/** Anchor points for the on-screen part labels. */
-export const RETORT_ANCHORS = [
-  { id: 'vent', label: 'air vent', at: [0.8, RETORT_BOUNDS.yTop + 0.95, 0] },
-  { id: 'nozzle', label: 'spray nozzles', at: [0, 0.85, -RETORT_BOUNDS.radius * 1.12] },
-  { id: 'valves', label: 'steam / water valves', at: [RETORT_BOUNDS.radius + 1.5, -1.65, 0.25] },
-  { id: 'product', label: 'product (can)', at: [0, -1.25, 0.85] },
-];
+/** What the product actually is, so the callout does not say "can" for a sphere. */
+const PRODUCT_NOUN = {
+  finiteCylinder: 'can',
+  cylinder: 'cylinder',
+  slab: 'slab',
+  sphere: 'sphere',
+};
 
-function retort(state) {
-  // Proportioned so the food stays the subject: a real retort basket holds many
-  // cans, but a vessel three times the width of the product would leave the
-  // temperature field too small to read on a projector.
-  const shellR = 1.85;
-  const yBot = -1.6;
-  const yTop = 1.7;
+export function productNoun(geometry) {
+  return PRODUCT_NOUN[geometry] ?? 'product';
+}
+
+/** Anchor points for the on-screen part labels, in the current vessel. */
+export function retortAnchors(bounds = RETORT_BOUNDS, geometry = 'finiteCylinder') {
+  return [
+    { id: 'vent', label: 'air vent', at: [0.8, bounds.yTop + 0.95, 0] },
+    { id: 'nozzle', label: 'spray nozzles', at: [0, bounds.yTop * 0.5, -bounds.radius * 1.12] },
+    { id: 'valves', label: 'steam / water valves', at: [bounds.radius + 1.5, bounds.yBottom - 0.05, 0.25] },
+    { id: 'product', label: `product (${productNoun(geometry)})`, at: [0, bounds.yBottom * 0.78, 0.85] },
+  ];
+}
+
+function retort(state, bounds = RETORT_BOUNDS) {
+  // The vessel is normally fixed, like real hardware, and only grows when the
+  // food would otherwise not fit. See retortBounds().
+  const shellR = bounds.radius;
+  const yBot = bounds.yBottom;
+  const yTop = bounds.yTop;
 
   const shell = new PartBuilder().tube(shellR, yBot, yTop, 72).finish();
   const lid = new PartBuilder().annulus(0, shellR, yTop, 72, 1).finish();
@@ -274,14 +312,15 @@ function retort(state) {
 
   // The perforated rack the basket sits on.
   const rack = new PartBuilder();
-  rack.annulus(0.18, 1.5, -1.2, 56, 1);
+  rack.annulus(0.18, shellR * 0.81, yBot * 0.75, 56, 1);
   for (let i = 0; i < 4; i++) {
     const t = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    rack.pipe([1.35 * Math.cos(t), -1.2, 1.35 * Math.sin(t)], [1.35 * Math.cos(t), yBot, 1.35 * Math.sin(t)], 0.05, 12);
+    const rr = shellR * 0.73;
+    rack.pipe([rr * Math.cos(t), yBot * 0.75, rr * Math.sin(t)], [rr * Math.cos(t), yBot, rr * Math.sin(t)], 0.05, 12);
   }
 
   // --- spray nozzles on the wall, with the headers that feed them ----------
-  const nozzles = retortNozzles();
+  const nozzles = retortNozzles(bounds);
   const spray = new PartBuilder();
   for (const p of nozzles) {
     const rr = Math.hypot(p[0], p[2]) || 1;
@@ -296,22 +335,24 @@ function retort(state) {
   }
   // External ring headers feeding each row, plus the riser that supplies them.
   const headers = new PartBuilder();
-  for (const y of NOZZLE_ROWS) headers.torus(shellR * 1.07, 0.05, y, 48, 8);
-  headers.pipe([shellR * 1.07, yBot + 0.2, 0], [shellR * 1.07, 1.0, 0], 0.062, 14);
+  for (const f of NOZZLE_ROWS) headers.torus(shellR * 1.07, 0.05, f * yTop, 48, 8);
+  headers.pipe([shellR * 1.07, yBot + 0.2, 0], [shellR * 1.07, yTop * 0.6, 0], 0.062, 14);
   headers.pipe([shellR * 1.07, yBot + 0.2, 0], [shellR + 0.62, yBot + 0.2, 0], 0.062, 14);
 
   // --- valve train ---------------------------------------------------------
   // Steam and water admitted low through their own valves, as on the reference
   // diagram; the air vent sits at the crown.
   const pipes = new PartBuilder();
-  pipes.pipe([shellR + 0.62, -1.3, 0], [shellR + 1.5, -1.3, 0], 0.09, 16);
-  pipes.valve([shellR + 0.78, -1.3, 0], [shellR + 1.22, -1.3, 0], 0.09);
-  pipes.pipe([shellR + 0.62, -1.3, 0], [shellR + 0.62, yBot + 0.2, 0], 0.09, 16);
+  const vy = yBot + 0.3;
+  pipes.pipe([shellR + 0.62, vy, 0], [shellR + 1.5, vy, 0], 0.09, 16);
+  pipes.valve([shellR + 0.78, vy, 0], [shellR + 1.22, vy, 0], 0.09);
+  pipes.pipe([shellR + 0.62, vy, 0], [shellR + 0.62, yBot + 0.2, 0], 0.09, 16);
 
-  pipes.pipe([shellR + 0.62, -2.0, 0.5], [shellR + 1.5, -2.0, 0.5], 0.075, 16);
-  pipes.valve([shellR + 0.78, -2.0, 0.5], [shellR + 1.22, -2.0, 0.5], 0.075);
-  pipes.pipe([shellR + 0.62, -2.0, 0.5], [shellR + 0.62, -1.3, 0.5], 0.075, 16);
-  pipes.pipe([shellR + 0.62, -1.3, 0.5], [shellR + 0.62, -1.3, 0], 0.075, 12);
+  const wy = yBot - 0.4;
+  pipes.pipe([shellR + 0.62, wy, 0.5], [shellR + 1.5, wy, 0.5], 0.075, 16);
+  pipes.valve([shellR + 0.78, wy, 0.5], [shellR + 1.22, wy, 0.5], 0.075);
+  pipes.pipe([shellR + 0.62, wy, 0.5], [shellR + 0.62, vy, 0.5], 0.075, 16);
+  pipes.pipe([shellR + 0.62, vy, 0.5], [shellR + 0.62, vy, 0], 0.075, 12);
 
   // Vent at the top: a retort must vent its air before the process clock
   // starts, because trapped air lowers the effective medium temperature.
@@ -339,8 +380,8 @@ function retort(state) {
   // difference from steam is visible before any number is read.
   if (state?.heatingMedium === 'water') {
     const body = new PartBuilder();
-    body.tube(shellR * 0.96, yBot + 0.02, RETORT_BOUNDS.waterLevel, 64);
-    body.annulus(0, shellR * 0.96, RETORT_BOUNDS.waterLevel, 64, 1);
+    body.tube(shellR * 0.96, yBot + 0.02, bounds.waterLevel, 64);
+    body.annulus(0, shellR * 0.96, bounds.waterLevel, 64, 1);
     parts.push({ mesh: body.finish(), color: [0.42, 0.62, 0.86, 0.17] });
   }
 
@@ -396,9 +437,9 @@ function blastChiller() {
  * Equipment for the current scenario, or an empty list if none applies.
  * Returned parts are already in the food's normalised frame.
  */
-export function buildEquipment(scenario, state) {
+export function buildEquipment(scenario, state, bounds = RETORT_BOUNDS) {
   if (scenario === 'chill') return blastChiller();
-  if (scenario === 'retort') return retort(state);
+  if (scenario === 'retort') return retort(state, bounds);
   return [];
 }
 

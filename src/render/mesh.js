@@ -223,23 +223,61 @@ function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 64 }) {
 
 /* ------------------------------------------------------------------ */
 /**
+ * Scene units per metre of food.
+ *
+ * WHY A FIXED SCALE, AND NOT NORMALISATION
+ * The food used to be scaled by 1/extent, i.e. normalised to unit size. That
+ * makes every food fill the frame identically -- and therefore makes the
+ * radius and half-thickness sliders INVISIBLE in the 3-D view. A student could
+ * drag the radius from 5 mm to 150 mm, watch the heating time change by a
+ * factor of nine hundred, and see the picture not move at all. Since "double
+ * the size, quadruple the time" is one of the central lessons here, that was
+ * the single most costly thing the view could get wrong.
+ *
+ * With a fixed scale, size is comparable across every setting and across every
+ * geometry: a 5 mm sphere really is drawn a thirtieth the size of a 150 mm one.
+ *
+ * The constant is chosen so a standard 307x409 can (R = 43.65 mm) fills a bit
+ * over half the retort bore -- large enough that the temperature field is
+ * readable on a projector, while leaving room above and below for the slider
+ * range to show a real difference.
+ */
+export const SCENE_PER_METRE = 23;
+
+/**
  * Build the mesh for the current geometry.
+ *
+ * Returns the mesh, the fixed scene scale, and the food's bounding radius and
+ * half-height IN SCENE UNITS, so the vessel and the heating medium can be
+ * placed around it without independently re-deriving its size.
  *
  * @param cut  0 = whole object, 1 = a quarter removed (a 90 degree wedge)
  */
 export function buildGeometryMesh(geometry, state, cut) {
   const cutAngle = Math.max(0, Math.min(1, cut)) * (Math.PI / 2);
+  const s = SCENE_PER_METRE;
 
   if (geometry === 'slab') {
     const L = state.halfThickness;
     // Show the slab as a plate wider than it is thick, which is what the
     // "infinite slab" idealisation actually assumes.
     const span = Math.max(L * 6, L * 2);
-    return { mesh: slabMesh({ halfThickness: L, width: span, height: span, cutAngle }), extent: Math.max(L, span / 2) };
+    return {
+      mesh: slabMesh({ halfThickness: L, width: span, height: span, cutAngle }),
+      scale: s,
+      // The plate's circumscribed radius in the horizontal plane.
+      outerRadius: (span / 2) * Math.SQRT2 * s,
+      halfHeight: (span / 2) * s,
+    };
   }
 
   if (geometry === 'sphere') {
-    return { mesh: sphereMesh({ R: state.radius, cutAngle }), extent: state.radius };
+    return {
+      mesh: sphereMesh({ R: state.radius, cutAngle }),
+      scale: s,
+      outerRadius: state.radius * s,
+      halfHeight: state.radius * s,
+    };
   }
 
   const R = state.radius;
@@ -249,6 +287,8 @@ export function buildGeometryMesh(geometry, state, cut) {
   const halfHeight = twoD ? state.canHeight / 2 : R * 1.6;
   return {
     mesh: cylinderMesh({ R, halfHeight, cutAngle, twoD }),
-    extent: Math.max(R, halfHeight),
+    scale: s,
+    outerRadius: R * s,
+    halfHeight: halfHeight * s,
   };
 }

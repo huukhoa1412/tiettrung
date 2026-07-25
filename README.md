@@ -78,12 +78,21 @@ between the two models are labelled on the plot.
 ε-NTU side by side, co-current versus counter-current, and a holding tube that
 checks the *fastest* particle rather than the average one.
 
-### Four modes
+### Connecting the maths to the sliders
 
-- **Explore** — free experimentation with every parameter
-- **Learn** — six guided lessons, each read → predict → reveal
-- **Quiz** — twelve questions with explanations for right answers too
-- **Compare** — pin a run, change something, see both with a difference column
+The hardest gap in a heat-transfer course is between *the number I am dragging*
+and *the letter in the equation*. So every symbol in every equation is tagged
+with the parameter that drives it:
+
+- each control group shows **the equation it drives, inline beside its sliders**
+- **hovering a control lights up its symbol everywhere** — in the inline
+  equation, in the full equation list, and on the result tile it produces
+- hovering a **result tile** lights up the same chain in reverse
+
+The guided-lesson, quiz and compare modes have been set aside for now; the
+tool is a single Explore mode. Their source is still in `src/teach/` and
+`src/ui/teachpanel.js`, unreferenced and therefore not bundled, if they are
+wanted back.
 
 ---
 
@@ -171,7 +180,8 @@ Edit anything under `src/`, run `node build.mjs`, reload.
   surfaces (worst adjacent ΔE 9.2 light / 9.4 dark)
 - Every chart carries a legend plus direct labels — identity is never colour
   alone — and a table view for the same numbers
-- Quiz feedback uses a glyph and a border as well as colour
+- The symbol highlight uses a background chip and a weight change, not colour
+  alone, so it survives colour-vision deficiency and greyscale projection
 - Respects `prefers-reduced-motion`
 
 ---

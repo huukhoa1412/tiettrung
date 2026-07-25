@@ -101,7 +101,7 @@ const STOPS = {
  * means no student is locked out of the picture.
  */
 export const COLORMAPS = [
-  { id: 'rainbow', label: 'Rainbow (COMSOL)' },
+  { id: 'rainbow', label: 'Rainbow' },
   { id: 'viridis', label: 'Viridis (colour-blind safe)' },
 ];
 

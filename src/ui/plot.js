@@ -183,8 +183,13 @@ export class LinePlot {
     const pw = w - m.l - m.r;
     const ph = h - m.t - m.b;
 
-    let [x0, x1] = s.xDomain ?? autoDomain(s.series, 'x');
-    let [y0, y1] = s.yDomain ?? autoDomain(s.series, 'y');
+    // Reference markers participate in the auto domain. Without this, raising
+    // the F0 target above the value the process actually reaches pushed the
+    // target line outside the frame -- so the line appeared to VANISH rather
+    // than move, and the student lost the one visual cue telling them the
+    // process now falls short.
+    let [x0, x1] = s.xDomain ?? autoDomain(s.series, 'x', s.markers);
+    let [y0, y1] = s.yDomain ?? autoDomain(s.series, 'y', s.markers);
     if (x1 === x0) x1 = x0 + 1;
     if (y1 === y0) y1 = y0 + 1;
 
@@ -427,7 +432,7 @@ export class LinePlot {
   }
 }
 
-function autoDomain(series, key) {
+function autoDomain(series, key, markers = null) {
   let lo = Infinity;
   let hi = -Infinity;
   for (const ser of series) {
@@ -438,6 +443,14 @@ function autoDomain(series, key) {
       if (v < lo) lo = v;
       if (v > hi) hi = v;
     }
+  }
+  // A marker on THIS axis must stay inside the frame; one on the other axis
+  // spans it and is irrelevant to the range.
+  for (const mk of markers ?? []) {
+    if (mk.axis !== key) continue;
+    if (!Number.isFinite(mk.value)) continue;
+    if (mk.value < lo) lo = mk.value;
+    if (mk.value > hi) hi = mk.value;
   }
   if (!Number.isFinite(lo)) return [0, 1];
   const pad = (hi - lo) * 0.06 || Math.abs(hi) * 0.1 || 1;

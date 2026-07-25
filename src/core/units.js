@@ -50,12 +50,53 @@ export function clock(seconds) {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-/** Dimensionless groups: no unit, but they deserve consistent precision. */
-export function dimensionless(value, decimals = 3) {
+/**
+ * Three significant figures, as a plain decimal — no exponent.
+ *
+ * Exponent notation on a lecture slide is a small tax on every reader: they
+ * must decode it before they can compare it with the next number. Across the
+ * range these quantities actually occupy, a plain decimal is always readable,
+ * so that is what is shown. Anything genuinely too large or small for that is
+ * given a friendlier UNIT instead (see `diffusivity` below) rather than an
+ * exponent.
+ */
+export function sigFigs(value, figures = 3) {
   if (!Number.isFinite(value)) return '--';
-  if (Math.abs(value) >= 1000) return value.toExponential(2).replace('e', ' x 10^');
-  if (Math.abs(value) < 0.001 && value !== 0) return value.toExponential(2).replace('e', ' x 10^');
-  return value.toFixed(decimals);
+  if (value === 0) return '0';
+  const mag = Math.floor(Math.log10(Math.abs(value)));
+  const decimals = Math.max(0, figures - 1 - mag);
+  // Past six decimals a "plain" decimal stops being plain; fall back rather
+  // than print 0.0000001234.
+  if (decimals > 6) return value.toExponential(figures - 1).replace('e', '×10^');
+  return value.toFixed(Math.min(decimals, 6));
+}
+
+/**
+ * Dimensionless groups: three significant figures, no exponent.
+ *
+ * Bi = 145.476 reads as 145. The extra digits were never meaningful — h and k
+ * are known to two figures at best — and they cost the reader the ability to
+ * see at a glance that this is "about a hundred and fifty", which is the only
+ * thing the number is being used for.
+ */
+export function dimensionless(value) {
+  if (!Number.isFinite(value)) return '--';
+  if (Math.abs(value) >= 1e5) return value.toExponential(2).replace('e', '×10^');
+  return sigFigs(value, 3);
+}
+
+/**
+ * Thermal diffusivity, in mm²/s.
+ *
+ * SI says m²/s, which puts every food at about 1.5×10⁻⁷ — an exponent the
+ * reader must decode every single time, and one that makes two foods look
+ * identical when they differ by 10 %. In mm²/s the same numbers land near
+ * 0.15, which is directly comparable and needs no decoding. The unit is
+ * printed beside it, so nothing is lost.
+ */
+export function diffusivity(alphaSI, decimals = 3) {
+  if (!Number.isFinite(alphaSI)) return '--';
+  return (alphaSI * 1e6).toFixed(decimals);
 }
 
 /** Length, switching to millimetres below 10 cm where that reads better. */

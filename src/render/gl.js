@@ -541,15 +541,23 @@ export class FieldRenderer {
   requestDraw() {
     if (this._pending) return;
     this._pending = true;
+    // Same reasoning as scheduleSolve() in main.js: arm both a frame callback
+    // and a timer so a starved rAF cannot leave the latch raised and freeze
+    // every future redraw.
+    let raf = null;
+    let timer = null;
     const run = () => {
+      if (!this._pending) return;
       this._pending = false;
+      if (raf !== null) cancelAnimationFrame(raf);
+      if (timer !== null) clearTimeout(timer);
       this.draw();
     };
-    if (document.hidden) setTimeout(run, 0);
-    else requestAnimationFrame(run);
+    if (!document.hidden) raf = requestAnimationFrame(run);
+    timer = setTimeout(run, 24);
   }
 
-  setGeometry(mesh, extent) {
+  setGeometry(mesh, scale) {
     const gl = this.gl;
     gl.bindVertexArray(this.vao);
 
@@ -568,8 +576,10 @@ export class FieldRenderer {
     this.indexCount = mesh.count;
 
     gl.bindVertexArray(null);
-    // Normalise so any food fills a comparable share of the frame.
-    this.scale = extent > 0 ? 1 / extent : 1;
+    // A FIXED scene scale, supplied by the caller. It used to be 1/extent,
+    // which normalised every food to the same on-screen size and so hid the
+    // size sliders completely. See SCENE_PER_METRE in mesh.js.
+    this.scale = scale > 0 ? scale : 1;
   }
 
   /**

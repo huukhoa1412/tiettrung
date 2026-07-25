@@ -14,6 +14,7 @@
  */
 
 import { clamp, UNITS } from '../core/units.js';
+import { renderEquation, highlightSymbol, GROUP_EQUATION } from './mathblocks.js';
 
 /** Controls, grouped, per scenario. `visible` hides a control contextually. */
 export const CONTROL_SPEC = {
@@ -283,12 +284,13 @@ function toSlider(control, value) {
 
 function fromSlider(control, pos) {
   const r = pos / SLIDER_STEPS;
-  if (control.scale === 'log') {
-    return control.min * Math.pow(control.max / control.min, r);
-  }
-  const raw = control.min + r * (control.max - control.min);
-  // Snap to the declared step so typed and dragged values agree.
-  return Math.round(raw / control.step) * control.step;
+  const raw =
+    control.scale === 'log'
+      ? control.min * Math.pow(control.max / control.min, r)
+      : control.min + r * (control.max - control.min);
+  // Both scales snap to the box's own precision, so a dragged value and a
+  // typed value are the same kind of number and the box never lies.
+  return clamp(snapToBox(control, raw), control.min, control.max);
 }
 
 /** Value shown in the numeric box, which may use a display unit (mm, min). */
@@ -302,6 +304,28 @@ function fromDisplay(control, shown) {
   if (control.display === 'mm') return shown / 1000;
   if (control.display === 'min') return shown * 60;
   return shown;
+}
+
+/**
+ * Snap a value to exactly what the numeric box will display.
+ *
+ * THE INVARIANT THIS ENFORCES: the number on screen IS the number solved.
+ *
+ * Previously only the linear branch snapped, and it snapped in STEP space
+ * while the box rounded in DISPLAY space. On a logarithmic slider (h, process
+ * time, area, flow rates) nothing snapped at all, so the box would read
+ * "6000" while the solver ran 6003.47. The two disagreed permanently and
+ * invisibly, which is precisely the class of defect that makes a teaching
+ * tool untrustworthy: a student reading h off the panel and recomputing Bi by
+ * hand would not reproduce the Bi shown.
+ *
+ * Rounding at the box's own precision makes the round trip idempotent by
+ * construction, on either scale.
+ */
+function snapToBox(control, value) {
+  const decimals = control.decimals ?? 2;
+  const shown = Number(toDisplay(control, value).toFixed(decimals));
+  return fromDisplay(control, shown);
 }
 
 /* ------------------------------------------------------------------ */
@@ -330,9 +354,22 @@ export function createPanel(container, store, presets) {
       heading.textContent = group.title;
       section.appendChild(heading);
 
+      // The equation this group drives, shown INLINE with the sliders that
+      // feed it. Keeping the maths beside the controls is the whole point:
+      // a student should not have to look across the screen to find out what
+      // the slider they are holding actually does.
+      const eqId = GROUP_EQUATION[group.title];
+      if (eqId) {
+        const holder = document.createElement('div');
+        holder.className = 'group-eq';
+        renderEquation(holder, eqId, { compact: true });
+        section.appendChild(holder);
+      }
+
       for (const control of group.controls) {
         const row = renderControl(control, store, presets);
         if (row) {
+          attachHighlight(row.element, control.key);
           section.appendChild(row.element);
           registry.push({ control, ...row });
         }
@@ -362,6 +399,31 @@ export function createPanel(container, store, presets) {
   });
 
   return { refresh, rebuild: build };
+}
+
+/**
+ * Light up this parameter's symbol wherever it appears.
+ *
+ * Hover and keyboard focus both trigger it, so the connection is available to
+ * a student exploring with the mouse AND to one tabbing through. Dragging
+ * holds the highlight until the pointer leaves, which is what makes the link
+ * legible during the drag itself -- the moment the number is actually moving.
+ */
+function attachHighlight(el, key) {
+  if (!key) return;
+  el.dataset.param = key;
+  const on = () => {
+    el.classList.add('is-active');
+    highlightSymbol(key);
+  };
+  const off = () => {
+    el.classList.remove('is-active');
+    highlightSymbol(null);
+  };
+  el.addEventListener('pointerenter', on);
+  el.addEventListener('pointerleave', off);
+  el.addEventListener('focusin', on);
+  el.addEventListener('focusout', off);
 }
 
 function renderControl(control, store, presets) {
@@ -407,7 +469,17 @@ function renderControl(control, store, presets) {
       opt.textContent = preset.label;
       select.appendChild(opt);
     }
-    select.addEventListener('change', () => presets.apply(select.value, store));
+    // A "Custom" entry, so the dropdown can honestly report that the
+    // properties no longer match any preset.
+    const customOpt = document.createElement('option');
+    customOpt.value = '__custom';
+    customOpt.textContent = 'Custom (edited)';
+    customOpt.disabled = true;
+    select.appendChild(customOpt);
+
+    select.addEventListener('change', () => {
+      if (select.value !== '__custom') presets.apply(select.value, store);
+    });
     el.appendChild(select);
 
     const cite = document.createElement('p');
@@ -417,9 +489,25 @@ function renderControl(control, store, presets) {
     return {
       element: el,
       update(state) {
-        select.value = state[control.key] ?? '';
         const preset = presets.all()[state[control.key]];
-        cite.textContent = preset ? preset.source : '';
+        // Once k, rho or c_p have been dragged away from the preset, the
+        // citation underneath is no longer true of the numbers being solved.
+        // Continuing to show "USDA FoodData Central 170104" beside edited
+        // properties teaches students to trust a provenance that has been
+        // silently invalidated -- so the row says so instead.
+        const edited =
+          preset &&
+          (Math.abs(state.k - preset.derived.k) > 5e-4 ||
+            Math.abs(state.rho - preset.derived.rho) > 0.5 ||
+            Math.abs(state.cp - preset.derived.cp) > 0.5);
+
+        select.value = edited ? '__custom' : (state[control.key] ?? '');
+        customOpt.disabled = !edited;
+        cite.innerHTML = !preset
+          ? ''
+          : edited
+            ? `Properties edited by hand — no longer the cited ${preset.label} values.`
+            : preset.source;
       },
     };
   }
@@ -458,19 +546,42 @@ function renderControl(control, store, presets) {
     const value = fromSlider(control, Number(range.value));
     number.value = toDisplay(control, value).toFixed(control.decimals ?? 2);
     store.set({ [control.key]: value });
+    highlightSymbol(control.key);
   });
 
-  const commitNumber = () => {
-    const shown = Number(number.value);
-    if (!Number.isFinite(shown)) return;
-    // The typed box is the exact-entry path, so it is allowed to go slightly
-    // beyond the slider range rather than silently clamping the user's intent
-    // to something they did not type -- but not outside physical sense.
-    const value = clamp(fromDisplay(control, shown), control.min, control.max);
-    store.set({ [control.key]: value });
+  const decimals = control.decimals ?? 2;
+  /** Force the box to display the value that is actually stored. */
+  const showStored = () => {
+    const v = store.get()[control.key];
+    if (Number.isFinite(v)) number.value = toDisplay(control, v).toFixed(decimals);
   };
+
+  const commitNumber = () => {
+    const raw = number.value.trim();
+    // An empty box means "I have not finished typing", not "use the minimum".
+    // Number('') is 0, which would silently clamp to control.min.
+    if (raw === '') {
+      showStored();
+      return;
+    }
+    const shown = Number(raw);
+    if (!Number.isFinite(shown)) {
+      showStored();
+      return;
+    }
+    const value = clamp(snapToBox(control, fromDisplay(control, shown)), control.min, control.max);
+    store.set({ [control.key]: value });
+    // Write the accepted value back UNCONDITIONALLY. A typed value outside the
+    // range is clamped in the store, and previously the box kept showing what
+    // was typed -- so the panel could read "R = 200 mm" while every result on
+    // screen was for 150 mm, and nothing ever corrected it because the store
+    // saw no change and therefore never refreshed the row.
+    showStored();
+  };
+  // `change` already covers Enter, blur-after-edit, spinners and arrow keys.
+  // A separate blur handler additionally fired on blur WITHOUT an edit, which
+  // re-committed and could snap a value the user never touched.
   number.addEventListener('change', commitNumber);
-  number.addEventListener('blur', commitNumber);
 
   return {
     element: el,
@@ -479,8 +590,9 @@ function renderControl(control, store, presets) {
       if (!Number.isFinite(value)) return;
       suppress = true;
       range.value = String(toSlider(control, value));
+      // Never overwrite the box while it is being typed into.
       if (document.activeElement !== number) {
-        number.value = toDisplay(control, value).toFixed(control.decimals ?? 2);
+        number.value = toDisplay(control, value).toFixed(decimals);
       }
       suppress = false;
     },

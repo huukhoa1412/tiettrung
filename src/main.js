@@ -10,31 +10,36 @@
  *
  * Playback moves through PRECOMPUTED frames, so scrubbing never triggers
  * physics and stays smooth regardless of mesh size.
+ *
+ * FRAME INDEXING
+ * `state.frame` is a FLOAT while playing, because playback advances it by a
+ * fractional number of frames each tick. Every use of it as an ARRAY INDEX
+ * must round first: a typed array indexed at 1.5 returns undefined, not an
+ * interpolated value, and the resulting NaN propagates silently into whatever
+ * displays it. `frameIndex()` below is the single place that conversion
+ * happens.
  */
 
 import { createStore, defaultState, derived, SCENARIOS } from './core/state.js';
 import { solveScenario } from './core/solve.js';
-import { PRESETS, applyPreset } from './core/presets.js';
+import { PRESETS, applyPreset, presetAppliedValues } from './core/presets.js';
 import { createPanel } from './ui/panel.js';
 import { createReadout } from './ui/readout.js';
 import { createPlots } from './ui/plots.js';
 import { createStage } from './render/stage.js';
-import { createLearnPanel, createQuizPanel } from './ui/teachpanel.js';
-import { createComparePanel } from './ui/compare.js';
 import { MEDIA } from './render/medium.js';
-import { renderEquations, SCENARIO_EQUATIONS } from './ui/mathblocks.js';
+import { renderEquations, SCENARIO_EQUATIONS, highlightSymbol } from './ui/mathblocks.js';
 import { clock } from './core/units.js';
-
-const MODES = [
-  { id: 'explore', label: 'Explore' },
-  { id: 'learn', label: 'Learn' },
-  { id: 'quiz', label: 'Quiz' },
-  { id: 'compare', label: 'Compare' },
-];
 
 function boot() {
   const store = createStore(defaultState());
   const el = (id) => document.getElementById(id);
+
+  /** The current frame as a valid integer index into the latest result. */
+  const frameIndex = (result, frame) => {
+    if (!result || !result.times) return 0;
+    return Math.max(0, Math.min(result.nFrames, Math.round(frame)));
+  };
 
   /* ------------------------- theme ------------------------- */
   const applyTheme = (theme) => {
@@ -69,11 +74,16 @@ function boot() {
   }
 
   const syncScenarioTabs = buildTabs(el('scenario-tabs'), Object.values(SCENARIOS), 'scenario');
-  const syncModeTabs = buildTabs(el('mode-tabs'), MODES, 'mode');
 
   /* ---------------------- sub-components -------------------- */
+  // Each preset is augmented with the exact values applying it would write, so
+  // the panel can detect that the properties have since been edited by hand
+  // and stop attributing them to a cited source. Computed once at boot.
+  const PRESETS_WITH_VALUES = Object.fromEntries(
+    Object.entries(PRESETS).map(([id, p]) => [id, { ...p, derived: presetAppliedValues(id) }]),
+  );
   const presets = {
-    all: () => PRESETS,
+    all: () => PRESETS_WITH_VALUES,
     apply: (id, s) => applyPreset(id, s),
   };
   createPanel(el('control-panel'), store, presets);
@@ -81,33 +91,14 @@ function boot() {
   const plots = createPlots(el('plots'));
   const stage = createStage(el('stage'), store);
 
-  // The three teaching modes share one card; only the active one is built, so
-  // a lesson's state is not lost by glancing at the quiz.
-  const teachCard = el('teach-card');
-  const teachPanel = el('teach-panel');
-  const compare = createComparePanel();
-  let mountedMode = null;
-
-  function mountMode(mode) {
-    if (mode === mountedMode) return;
-    mountedMode = mode;
-    teachCard.hidden = mode === 'explore';
-    if (mode === 'explore') return;
-
-    if (mode === 'learn') {
-      el('teach-title').textContent = 'Guided lesson';
-      teachPanel.innerHTML = '';
-      createLearnPanel(teachPanel, store);
-    } else if (mode === 'quiz') {
-      el('teach-title').textContent = 'Quiz';
-      teachPanel.innerHTML = '';
-      createQuizPanel(teachPanel);
-    } else if (mode === 'compare') {
-      el('teach-title').textContent = 'Compare two runs';
-      teachPanel.innerHTML = '';
-      compare.mount(teachPanel);
-    }
-  }
+  // The reverse link: hovering a RESULT tile lights up the same symbol in the
+  // equations and the control that drives it. A student who notices a number
+  // behaving oddly can trace it back to its parameter without hunting.
+  el('metrics').addEventListener('pointerover', (e) => {
+    const t = e.target.closest('[data-sym]');
+    highlightSymbol(t ? t.dataset.sym : null);
+  });
+  el('metrics').addEventListener('pointerleave', () => highlightSymbol(null));
 
   /* ------------------------ solve loop ---------------------- */
   let latest = null;
@@ -125,26 +116,57 @@ function boot() {
         el('solve-note').textContent = `Solver error: ${err.message}`;
         console.error(err);
       }
+      // A new solve may have fewer frames than the last (the frame count is
+      // fixed, but the scenario can change shape entirely). Clamp so the
+      // scrubber and every consumer stay inside the new result.
+      if (latest && latest.times) {
+        const s = store.get();
+        if (s.frame > latest.nFrames) store.set({ frame: latest.nFrames });
+      }
     }
     paint();
   }
 
+  /**
+   * Coalesce work to one solve per frame, WITHOUT making correctness depend on
+   * requestAnimationFrame ever firing.
+   *
+   * rAF is the right coalescing signal when it runs, but there are real
+   * situations where it does not: a hidden tab, a window with no compositor,
+   * some remote-desktop and virtual-machine setups, and headless rendering.
+   * The previous version took the rAF path whenever `document.hidden` was
+   * false and set a `scheduled` latch first — so in any of those environments
+   * the callback never arrived, the latch stayed raised, and EVERY subsequent
+   * parameter change was silently dropped. The controls still moved and the
+   * store still updated; only the physics stopped. That is the worst possible
+   * failure mode for a teaching tool, because the interface looks alive while
+   * the numbers quietly stop being true.
+   *
+   * Both a frame callback and a timer are armed; whichever arrives first does
+   * the work and disarms the other. Behaviour is unchanged where rAF works,
+   * and guaranteed where it does not.
+   */
   function scheduleSolve() {
     if (scheduled) return;
     scheduled = true;
+
+    let rafHandle = null;
+    let timerHandle = null;
     const run = () => {
+      if (!scheduled) return;
       scheduled = false;
+      if (rafHandle !== null) cancelAnimationFrame(rafHandle);
+      if (timerHandle !== null) clearTimeout(timerHandle);
+      rafHandle = timerHandle = null;
       runSolve();
     };
-    // requestAnimationFrame does not fire in a hidden or non-compositing tab.
-    // Without this fallback a page opened in a background tab -- or restored
-    // from one -- would sit with an empty results panel until it was brought
-    // to the front, which looks exactly like a crash.
-    if (document.hidden) setTimeout(run, 0);
-    else requestAnimationFrame(run);
+
+    if (!document.hidden) rafHandle = requestAnimationFrame(run);
+    // ~1.5 frames at 60 Hz: long enough that rAF normally wins and we still
+    // coalesce, short enough that a starved rAF is imperceptible.
+    timerHandle = setTimeout(run, 24);
   }
 
-  // Re-run on return to the foreground, in case anything was missed.
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) scheduleSolve();
   });
@@ -158,7 +180,6 @@ function boot() {
     el('scenario-blurb').textContent = scenario.blurb;
 
     syncScenarioTabs(state);
-    syncModeTabs(state);
 
     // Each view is isolated. A throw inside one of them used to abort the rest
     // of paint(), leaving later panels showing the PREVIOUS scenario's numbers
@@ -174,31 +195,30 @@ function boot() {
       }
     };
 
-    mountMode(state.mode);
     safely('Results', () => readout.render(state, der, latest));
-    safely('Plots', () => plots.render(state, der, latest, compare.baseline()));
+    safely('Plots', () => plots.render(state, der, latest));
     safely('3-D view', () => stage.render(state, latest));
-    if (state.mode === 'compare') safely('Compare', () => compare.update(state, der, latest));
 
     // Playback stops itself at the end of the run, so the glyph is driven from
     // state here rather than only from the click handler -- otherwise the
     // button sits showing "pause" on a run that has already finished.
     el('play').textContent = state.playing ? '❚❚' : '▶';
 
-    // Transport applies only to the time-marching scenarios.
     const hasFrames = latest && latest.times;
     const scrub = el('scrub');
     const transport = scrub.closest('.transport');
     transport.style.visibility = hasFrames ? 'visible' : 'hidden';
     if (hasFrames) {
+      const f = frameIndex(latest, state.frame);
       scrub.max = String(latest.nFrames);
-      scrub.value = String(Math.min(state.frame, latest.nFrames));
-      el('clock').textContent = clock(latest.times[Math.min(state.frame, latest.nFrames)]);
+      scrub.value = String(f);
+      el('clock').textContent = clock(latest.times[f]);
     }
   }
 
   store.subscribe((state, changed, physicsChanged) => {
     if (physicsChanged) dirty = true;
+
     // Choosing a heating medium sets a representative surface coefficient,
     // because that is a real physical consequence and not just a change of
     // picture. The slider stays free afterwards, so it is a starting point
