@@ -244,10 +244,12 @@ export function createStage(container, store) {
 
     // Equipment depends only on the scenario and the toggle, so it is rebuilt
     // far less often than the field.
-    // The vessel is sized from the food, so its key must include the food's
-    // size. Omitting it left a fixed-bore retort around a resized can.
+    // The vessel is FIXED hardware, so its key depends only on which vessel
+    // is shown and what medium runs through it -- never on the food. Keying it
+    // to the food size rebuilt the retort on every size change, which is
+    // exactly what made the food appear not to change size at all.
     const wantEquip = gl && state.showEquipment
-      ? [state.scenario, state.heatingMedium, geometry, foodR.toFixed(3), foodH.toFixed(3)].join(':')
+      ? [state.scenario, state.heatingMedium].join(':')
       : 'none';
     if (wantEquip !== equipKey || force) {
       if (gl) {
@@ -255,10 +257,11 @@ export function createStage(container, store) {
         gl.setEquipment(parts);
         // Reframe: the vessel is roughly three times the size of the food, so
         // without this the equipment would sit outside the frustum entirely.
-        // Frame on whatever is actually largest -- the vessel, or a food that
-        // has outgrown it -- so nothing is ever clipped by the frustum.
+        // Frame on the VESSEL, which never moves. A framing that tracked the
+        // food would zoom to keep it the same apparent size and undo the whole
+        // point of drawing it to scale.
         const frameR = parts.length
-          ? Math.max(bounds.radius, bounds.yTop) * 1.6
+          ? Math.max(bounds.radius, bounds.yTop) * 1.5
           : Math.max(foodR, foodH) * 1.5;
         gl.setFraming(frameR, { keepUserZoom: true });
         buildLabels(

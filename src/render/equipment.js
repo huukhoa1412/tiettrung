@@ -221,28 +221,29 @@ export class PartBuilder {
 /**
  * The retort's inner clear radius and vertical span, in scene units.
  *
- * Real hardware has a FIXED bore, and that is the default here: at ordinary
- * can sizes the vessel stays put while the food visibly grows or shrinks
- * inside it, which is exactly the comparison the size sliders are for. The
- * vessel only grows once the food would otherwise burst through the wall, so
- * the extremes of the slider range still produce a sensible picture rather
- * than a can sticking through a retort.
+ * THE VESSEL NEVER CHANGES. It is a fixed piece of hardware, exactly as in a
+ * real plant: you do not buy a new retort because you switched can size. Only
+ * the FOOD changes size inside it, and that is the whole point of the size
+ * sliders -- the comparison a student needs is the food against an unchanging
+ * reference, so it must be the food that moves.
+ *
+ * An earlier version grew the vessel to contain oversized food. That destroyed
+ * the comparison: both the food and its surroundings scaled together, so the
+ * picture looked identical and the slider appeared to do nothing. The food's
+ * drawn size is instead bounded by the slider ranges (see panel.js) and by the
+ * caps on arbitrary dimensions in mesh.js, so the food always fits.
  */
-const RETORT_MIN_BORE = 1.85;
+export const RETORT_BOUNDS = Object.freeze({
+  radius: 1.85,
+  yBottom: -2.3,
+  yTop: 2.4,
+  waterLevel: 1.8,
+});
 
-export function retortBounds(foodRadius = 0, foodHalfHeight = 0) {
-  const radius = Math.max(RETORT_MIN_BORE, foodRadius * 1.35);
-  const halfSpan = Math.max(1.65, foodHalfHeight * 1.3);
-  return {
-    radius,
-    yBottom: -halfSpan,
-    yTop: halfSpan + 0.1,
-    waterLevel: halfSpan * 0.8,
-  };
+/** Kept as a function for call sites; the vessel is fixed, so it ignores args. */
+export function retortBounds() {
+  return RETORT_BOUNDS;
 }
-
-/** Default bounds, for callers that only need the nominal vessel. */
-export const RETORT_BOUNDS = retortBounds();
 
 /** Heights of the nozzle rows on the chamber wall. */
 // Fractions of the vessel half-height, so the rows track a resized vessel.

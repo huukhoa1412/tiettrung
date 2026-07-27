@@ -3380,7 +3380,15 @@ __registry["ui/mathblocks.js"] = function (__exports, __req) {
 /* ------------------------------------------------------------------ */
 /* Symbol helpers. `key` is the state parameter this symbol represents. */
 
-/** A tagged identifier: <mi data-sym="k">k</mi> */
+/**
+ * A tagged identifier: <mi data-sym="k">k</mi>
+ *
+ * `key` may be a SPACE-SEPARATED LIST when one symbol stands for more than one
+ * control. The radial coordinate r, for instance, is bounded by the Radius
+ * slider for a cylinder or sphere and by the Half-thickness slider for a slab;
+ * both must light it up. Matching uses the `~=` attribute selector, which is
+ * defined on whitespace-separated lists.
+ */
 const S = (key, glyph) => `<mi class="sym" data-sym="${key}">${glyph}</mi>`;
 
 /** A tagged subscripted identifier, e.g. T_i or c_p. */
@@ -3422,6 +3430,33 @@ const EQUATIONS = {
       'Raising c_p or ρ slows the food down even though it conducts just as well.',
   },
 
+  /**
+   * The 1-D conduction equation, shown beside the Geometry controls for the
+   * slab, the infinite cylinder and the sphere. `r` is the radial coordinate
+   * the Radius slider sets the outer limit of, so the connection between the
+   * control and the maths is direct.
+   */
+  conduction1D: {
+    title: 'Transient conduction',
+    params: ['k', 'rho', 'cp', 'alpha', 'radius', 'halfThickness'],
+    mathml: block(
+      row(
+        frac(row(O('∂'), I('T')), row(O('∂'), I('t'))),
+        O('='),
+        D('alpha', 'α'),
+        frac(N('1'), `<msup>${S('radius halfThickness', 'r')}<mi>m</mi></msup>`),
+        frac(O('∂'), row(O('∂'), S('radius halfThickness', 'r'))),
+        O('('),
+        `<msup>${S('radius halfThickness', 'r')}<mi>m</mi></msup>`,
+        frac(row(O('∂'), I('T')), row(O('∂'), S('radius halfThickness', 'r'))),
+        O(')'),
+      ),
+    ),
+    note:
+      'The shape exponent m is 0 for a slab, 1 for a cylinder and 2 for a sphere — the only thing that ' +
+      'changes between the three. r runs from the centre out to the radius (or half-thickness) you set above.',
+  },
+
   conduction2D: {
     title: 'Transient conduction in the can',
     params: ['k', 'rho', 'cp', 'alpha', 'radius', 'canHeight'],
@@ -3431,11 +3466,11 @@ const EQUATIONS = {
         O('='),
         D('alpha', 'α'),
         O('['),
-        frac(N('1'), S('radius', 'r')),
-        frac(O('∂'), row(O('∂'), S('radius', 'r'))),
+        frac(N('1'), S('radius halfThickness', 'r')),
+        frac(O('∂'), row(O('∂'), S('radius halfThickness', 'r'))),
         O('('),
-        S('radius', 'r'),
-        frac(row(O('∂'), I('T')), row(O('∂'), S('radius', 'r'))),
+        S('radius halfThickness', 'r'),
+        frac(row(O('∂'), I('T')), row(O('∂'), S('radius halfThickness', 'r'))),
         O(')'),
         O('+'),
         frac(row(`<msup>${O('∂')}${N('2')}</msup>`, I('T')), row(O('∂'), `<msup>${S('canHeight', 'z')}${N('2')}</msup>`)),
@@ -3477,10 +3512,10 @@ const EQUATIONS = {
       row(
         D('Bi', 'Bi'),
         O('='),
-        frac(row(S('h', 'h'), Ssub('radius', 'L', 'c')), S('k', 'k')),
+        frac(row(S('h', 'h'), Ssub('radius halfThickness', 'L', 'c')), S('k', 'k')),
         O('='),
         frac(
-          row(Ssub('radius', 'L', 'c'), O('/'), S('k', 'k')),
+          row(Ssub('radius halfThickness', 'L', 'c'), O('/'), S('k', 'k')),
           row(N('1'), O('/'), S('h', 'h')),
         ),
       ),
@@ -3492,7 +3527,7 @@ const EQUATIONS = {
   },
 
   fourier: {
-    title: 'Fourier number — dimensionless time',
+    title: 'Fourier number Fo — dimensionless TIME',
     params: ['processTime', 'radius', 'halfThickness', 'alpha', 'Fo'],
     mathml: block(
       row(
@@ -3500,22 +3535,26 @@ const EQUATIONS = {
         O('='),
         frac(
           row(D('alpha', 'α'), S('processTime', 't')),
-          `<msubsup>${I('L')}${I('c')}${N('2')}</msubsup>`,
+          `<msubsup class="sym" data-sym="radius halfThickness"><mi>L</mi><mi>c</mi><mn>2</mn></msubsup>`,
         ),
       ),
     ),
     note:
       'How far heat has diffused compared with how far it must go. Note the SQUARE: doubling the can radius ' +
-      'quadruples the time to reach the same Fo. This one fact explains most of thermal process design.',
+      'quadruples the time to reach the same Fo. This one fact explains most of thermal process design.\n\n' +
+      'Do not confuse Fo with F₀. Fo (roman “o”) is the Fourier number, a dimensionless time. ' +
+      'F₀ (subscript zero) is the accumulated lethality in equivalent minutes. They are unrelated quantities ' +
+      'that unfortunately look alike.',
   },
 
   lethality: {
-    title: 'Process lethality F₀',
+    title: 'Process lethality F₀ — equivalent MINUTES',
     params: ['Tref', 'zValue', 'processTime', 'targetF0', 'F0'],
     mathml: block(
       row(
-        D('F0', 'F'),
-        `<msub><mi></mi><mn>0</mn></msub>`,
+        // A proper msub, so it renders as F with a subscript zero and is
+        // visually distinct from the Fourier number Fo.
+        `<msub class="sym" data-sym="F0"><mi>F</mi><mn>0</mn></msub>`,
         O('='),
         `<msubsup><mo>∫</mo><mn>0</mn>${S('processTime', 't')}</msubsup>`,
         `<msup>${N('10')}<mrow>${frac(
@@ -3528,7 +3567,8 @@ const EQUATIONS = {
     ),
     note:
       'Equivalent minutes at the reference temperature. Because the integrand is exponential, almost ALL ' +
-      'lethality is delivered in the last few degrees — which is why the curve stays flat and then leaps.',
+      'lethality is delivered in the last few degrees — which is why the curve stays flat and then leaps.\n\n' +
+      'F₀ (subscript zero) is a TIME IN MINUTES. It is not the Fourier number Fo, which is dimensionless.',
   },
 
   lumped: {
@@ -3671,16 +3711,32 @@ const SCENARIO_EQUATIONS = {
  * The single equation shown INLINE beside each control group, so the maths sits
  * next to the sliders that drive it rather than in a separate column.
  */
+/**
+ * A group's entry may be a plain id or a function of state, for groups whose
+ * relevant equation depends on what is selected.
+ *
+ * The Geometry group shows the CONDUCTION equation, because that is the one
+ * whose coordinates its sliders actually set: Radius bounds r, Height bounds
+ * z. It previously showed the Fourier number, which was wrong twice over --
+ * Fo is about time, not geometry, and "Fo =" sitting under a Geometry heading
+ * reads as "F₀ =", the lethality symbol, which has nothing to do with either.
+ */
 const GROUP_EQUATION = {
+  Geometry: (state) => (state.geometry === 'finiteCylinder' ? 'conduction2D' : 'conduction1D'),
   'Food properties': 'diffusivity',
   'Retort process': 'boundary',
   'Lethality basis': 'lethality',
-  Geometry: 'fourier',
   'Frozen properties': 'plank',
   'Blast chiller': 'boundary',
   'Plate pack': 'epsNtu',
   Arrangement: 'epsParallel',
 };
+
+/** Resolve a group's equation id for the current state. */
+function groupEquationId(groupTitle, state) {
+  const entry = GROUP_EQUATION[groupTitle];
+  return typeof entry === 'function' ? entry(state) : entry;
+}
 
 /* ------------------------------------------------------------------ */
 /** Render one equation block. */
@@ -3731,7 +3787,7 @@ function highlightSymbol(key) {
   }
   if (!key) return;
 
-  for (const el of document.querySelectorAll(`[data-sym="${key}"]`)) {
+  for (const el of document.querySelectorAll(`[data-sym~="${key}"]`)) {
     el.classList.add('is-active');
     // Mark the containing equation too, so the whole block lifts rather than
     // one glyph flickering inside an otherwise inert panel.
@@ -3752,11 +3808,12 @@ function taggedKeys() {
 __exports.EQUATIONS = undefined;
 __exports.SCENARIO_EQUATIONS = undefined;
 __exports.GROUP_EQUATION = undefined;
+__exports.groupEquationId = undefined;
 __exports.renderEquation = undefined;
 __exports.renderEquations = undefined;
 __exports.highlightSymbol = undefined;
 __exports.taggedKeys = undefined;
-Object.assign(__exports, { EQUATIONS, SCENARIO_EQUATIONS, GROUP_EQUATION, renderEquation, renderEquations, highlightSymbol, taggedKeys });
+Object.assign(__exports, { EQUATIONS, SCENARIO_EQUATIONS, GROUP_EQUATION, groupEquationId, renderEquation, renderEquations, highlightSymbol, taggedKeys });
 
 };
 __registry["ui/panel.js"] = function (__exports, __req) {
@@ -3776,7 +3833,7 @@ __registry["ui/panel.js"] = function (__exports, __req) {
  */
 
 const { clamp, UNITS } = __req("core/units.js");
-const { renderEquation, highlightSymbol, GROUP_EQUATION } = __req("ui/mathblocks.js");
+const { renderEquation, highlightSymbol, groupEquationId } = __req("ui/mathblocks.js");
 
 /** Controls, grouped, per scenario. `visible` hides a control contextually. */
 const CONTROL_SPEC = {
@@ -3795,21 +3852,24 @@ const CONTROL_SPEC = {
             { value: 'sphere', label: 'Sphere' },
           ],
         },
+        // Ranges cover every standard can and still fit inside the fixed
+        // retort. A No. 10 can -- the largest in normal use -- is 157 mm in
+        // diameter by 178 mm tall, comfortably inside these limits.
         {
           key: 'radius', type: 'slider', label: 'Radius', sym: 'R', unit: UNITS.mm,
-          min: 0.005, max: 0.15, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
+          min: 0.01, max: 0.09, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
           visible: (s) => s.geometry !== 'slab',
-          hint: 'A 307×409 can has R = 43.65 mm.',
+          hint: 'A 307×409 can has R = 43.65 mm; a No. 10 can has R = 78 mm.',
         },
         {
           key: 'canHeight', type: 'slider', label: 'Height', sym: 'H', unit: UNITS.mm,
-          min: 0.02, max: 0.4, step: 0.001, scale: 'lin', display: 'mm', decimals: 1,
+          min: 0.03, max: 0.25, step: 0.001, scale: 'lin', display: 'mm', decimals: 1,
           visible: (s) => s.geometry === 'finiteCylinder',
           hint: 'Full height. The solver uses half of it, by symmetry about mid-height.',
         },
         {
           key: 'halfThickness', type: 'slider', label: 'Half-thickness', sym: 'L', unit: UNITS.mm,
-          min: 0.002, max: 0.1, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
+          min: 0.002, max: 0.05, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
           visible: (s) => s.geometry === 'slab',
           hint: 'Heated from both faces, so the characteristic length is HALF the slab.',
         },
@@ -4102,12 +4162,15 @@ function snapToBox(control, value) {
 function createPanel(container, store, presets) {
   /** Rebuild rows whose visibility depends on other state. */
   const registry = [];
+  /** Per-group inline-equation updaters, for groups whose equation varies. */
+  const groupEquations = [];
 
   function build() {
     const state = store.get();
     const groups = CONTROL_SPEC[state.scenario] ?? [];
     container.innerHTML = '';
     registry.length = 0;
+    groupEquations.length = 0;
 
     for (const group of groups) {
       const section = document.createElement('div');
@@ -4120,13 +4183,22 @@ function createPanel(container, store, presets) {
       // feed it. Keeping the maths beside the controls is the whole point:
       // a student should not have to look across the screen to find out what
       // the slider they are holding actually does.
-      const eqId = GROUP_EQUATION[group.title];
-      if (eqId) {
-        const holder = document.createElement('div');
-        holder.className = 'group-eq';
-        renderEquation(holder, eqId, { compact: true });
-        section.appendChild(holder);
-      }
+      //
+      // Some groups pick their equation from state (the Geometry group shows
+      // the 1-D or 2-D conduction equation depending on the shape), so the
+      // holder is registered and refreshed rather than rendered once.
+      const eqHolder = document.createElement('div');
+      eqHolder.className = 'group-eq';
+      section.appendChild(eqHolder);
+      let shownEq = null;
+      const updateGroupEquation = (s) => {
+        const id = groupEquationId(group.title, s);
+        if (id === shownEq) return;
+        shownEq = id;
+        eqHolder.innerHTML = '';
+        if (id) renderEquation(eqHolder, id, { compact: true });
+      };
+      groupEquations.push(updateGroupEquation);
 
       for (const control of group.controls) {
         const row = renderControl(control, store, presets);
@@ -4144,6 +4216,8 @@ function createPanel(container, store, presets) {
   /** Push current state values into the widgets, and apply visibility rules. */
   function refresh() {
     const state = store.get();
+    // The Geometry group's equation follows the selected shape.
+    for (const update of groupEquations) update(state);
     for (const entry of registry) {
       const visible = entry.control.visible ? entry.control.visible(state) : true;
       entry.element.hidden = !visible;
@@ -8031,12 +8105,31 @@ function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 64 }) {
  * With a fixed scale, size is comparable across every setting and across every
  * geometry: a 5 mm sphere really is drawn a thirtieth the size of a 150 mm one.
  *
- * The constant is chosen so a standard 307x409 can (R = 43.65 mm) fills a bit
- * over half the retort bore -- large enough that the temperature field is
- * readable on a projector, while leaving room above and below for the slider
- * range to show a real difference.
+ * The constant is chosen so that the LARGEST food the sliders allow still fits
+ * inside the fixed retort, while a standard 307x409 can (R = 43.65 mm) is
+ * still large enough to read on a projector. With the retort bore at 1.85 and
+ * its half-span at 2.3 scene units:
+ *
+ *   default can  R = 43.65 mm -> 0.70  (38 % of the bore)
+ *   largest can  R = 90 mm    -> 1.44  (78 % of the bore)
+ *
+ * so the size sliders sweep the food across roughly half the vessel width, and
+ * nothing ever pokes through the wall.
  */
-const SCENE_PER_METRE = 23;
+const SCENE_PER_METRE = 16;
+
+/**
+ * Caps on the dimensions the model does NOT actually specify.
+ *
+ * An "infinite slab" has no width and an "infinite cylinder" has no length --
+ * those numbers are pictorial only, and the physics ignores them. Left
+ * uncapped they grow with the size slider and would push the drawing through
+ * the retort wall, so they are clamped to what the vessel can hold. The
+ * THICKNESS of the slab and the RADIUS of the cylinder are real and are never
+ * clamped.
+ */
+const MAX_PLATE_HALF_SPAN = 1.1; // circumscribed radius 1.1*sqrt(2) = 1.56 < bore
+const MAX_HALF_LENGTH = 2.0;
 
 /**
  * Build the mesh for the current geometry.
@@ -8054,14 +8147,16 @@ function buildGeometryMesh(geometry, state, cut) {
   if (geometry === 'slab') {
     const L = state.halfThickness;
     // Show the slab as a plate wider than it is thick, which is what the
-    // "infinite slab" idealisation actually assumes.
-    const span = Math.max(L * 6, L * 2);
+    // "infinite slab" idealisation actually assumes. The WIDTH is pictorial
+    // and is capped to fit the vessel; the thickness is the physics and is not.
+    const halfSpan = Math.min(L * 3, MAX_PLATE_HALF_SPAN / s);
+    const span = halfSpan * 2;
     return {
       mesh: slabMesh({ halfThickness: L, width: span, height: span, cutAngle }),
       scale: s,
       // The plate's circumscribed radius in the horizontal plane.
-      outerRadius: (span / 2) * Math.SQRT2 * s,
-      halfHeight: (span / 2) * s,
+      outerRadius: halfSpan * Math.SQRT2 * s,
+      halfHeight: halfSpan * s,
     };
   }
 
@@ -8076,9 +8171,11 @@ function buildGeometryMesh(geometry, state, cut) {
 
   const R = state.radius;
   const twoD = geometry === 'finiteCylinder';
-  // The infinite cylinder has no real length; draw it as tall as it is wide so
-  // nothing about the picture suggests the ends matter.
-  const halfHeight = twoD ? state.canHeight / 2 : R * 1.6;
+  // A finite cylinder has a real height. An infinite one does not: its drawn
+  // length is pictorial, so it is capped to fit the vessel.
+  const halfHeight = twoD
+    ? state.canHeight / 2
+    : Math.min(R * 1.6, MAX_HALF_LENGTH / s);
   return {
     mesh: cylinderMesh({ R, halfHeight, cutAngle, twoD }),
     scale: s,
@@ -8316,28 +8413,29 @@ class PartBuilder {
 /**
  * The retort's inner clear radius and vertical span, in scene units.
  *
- * Real hardware has a FIXED bore, and that is the default here: at ordinary
- * can sizes the vessel stays put while the food visibly grows or shrinks
- * inside it, which is exactly the comparison the size sliders are for. The
- * vessel only grows once the food would otherwise burst through the wall, so
- * the extremes of the slider range still produce a sensible picture rather
- * than a can sticking through a retort.
+ * THE VESSEL NEVER CHANGES. It is a fixed piece of hardware, exactly as in a
+ * real plant: you do not buy a new retort because you switched can size. Only
+ * the FOOD changes size inside it, and that is the whole point of the size
+ * sliders -- the comparison a student needs is the food against an unchanging
+ * reference, so it must be the food that moves.
+ *
+ * An earlier version grew the vessel to contain oversized food. That destroyed
+ * the comparison: both the food and its surroundings scaled together, so the
+ * picture looked identical and the slider appeared to do nothing. The food's
+ * drawn size is instead bounded by the slider ranges (see panel.js) and by the
+ * caps on arbitrary dimensions in mesh.js, so the food always fits.
  */
-const RETORT_MIN_BORE = 1.85;
+const RETORT_BOUNDS = Object.freeze({
+  radius: 1.85,
+  yBottom: -2.3,
+  yTop: 2.4,
+  waterLevel: 1.8,
+});
 
-function retortBounds(foodRadius = 0, foodHalfHeight = 0) {
-  const radius = Math.max(RETORT_MIN_BORE, foodRadius * 1.35);
-  const halfSpan = Math.max(1.65, foodHalfHeight * 1.3);
-  return {
-    radius,
-    yBottom: -halfSpan,
-    yTop: halfSpan + 0.1,
-    waterLevel: halfSpan * 0.8,
-  };
+/** Kept as a function for call sites; the vessel is fixed, so it ignores args. */
+function retortBounds() {
+  return RETORT_BOUNDS;
 }
-
-/** Default bounds, for callers that only need the nominal vessel. */
-const RETORT_BOUNDS = retortBounds();
 
 /** Heights of the nozzle rows on the chamber wall. */
 // Fractions of the vessel half-height, so the rows track a resized vessel.
@@ -8549,14 +8647,14 @@ function equipmentLabel(scenario) {
 }
 
 __exports.PartBuilder = undefined;
-__exports.retortBounds = undefined;
 __exports.RETORT_BOUNDS = undefined;
+__exports.retortBounds = undefined;
 __exports.retortNozzles = undefined;
 __exports.productNoun = undefined;
 __exports.retortAnchors = undefined;
 __exports.buildEquipment = undefined;
 __exports.equipmentLabel = undefined;
-Object.assign(__exports, { PartBuilder, retortBounds, RETORT_BOUNDS, retortNozzles, productNoun, retortAnchors, buildEquipment, equipmentLabel });
+Object.assign(__exports, { PartBuilder, RETORT_BOUNDS, retortBounds, retortNozzles, productNoun, retortAnchors, buildEquipment, equipmentLabel });
 
 };
 __registry["render/medium.js"] = function (__exports, __req) {
@@ -8993,10 +9091,12 @@ function createStage(container, store) {
 
     // Equipment depends only on the scenario and the toggle, so it is rebuilt
     // far less often than the field.
-    // The vessel is sized from the food, so its key must include the food's
-    // size. Omitting it left a fixed-bore retort around a resized can.
+    // The vessel is FIXED hardware, so its key depends only on which vessel
+    // is shown and what medium runs through it -- never on the food. Keying it
+    // to the food size rebuilt the retort on every size change, which is
+    // exactly what made the food appear not to change size at all.
     const wantEquip = gl && state.showEquipment
-      ? [state.scenario, state.heatingMedium, geometry, foodR.toFixed(3), foodH.toFixed(3)].join(':')
+      ? [state.scenario, state.heatingMedium].join(':')
       : 'none';
     if (wantEquip !== equipKey || force) {
       if (gl) {
@@ -9004,10 +9104,11 @@ function createStage(container, store) {
         gl.setEquipment(parts);
         // Reframe: the vessel is roughly three times the size of the food, so
         // without this the equipment would sit outside the frustum entirely.
-        // Frame on whatever is actually largest -- the vessel, or a food that
-        // has outgrown it -- so nothing is ever clipped by the frustum.
+        // Frame on the VESSEL, which never moves. A framing that tracked the
+        // food would zoom to keep it the same apparent size and undo the whole
+        // point of drawing it to scale.
         const frameR = parts.length
-          ? Math.max(bounds.radius, bounds.yTop) * 1.6
+          ? Math.max(bounds.radius, bounds.yTop) * 1.5
           : Math.max(foodR, foodH) * 1.5;
         gl.setFraming(frameR, { keepUserZoom: true });
         buildLabels(

@@ -13,10 +13,13 @@ Explorer, which cannot run the app.
 The gap this tool is built to close is between **the slider a student is
 dragging** and **the letter in the equation**. Three things do that:
 
-1. **Each control group carries its own equation, inline.** The Fourier number
-   sits in the Geometry group; α = k/ρc_p sits with the food properties; the
-   convective boundary condition sits with *h*. The maths is beside the sliders
-   that feed it, not in a separate column.
+1. **Each control group carries its own equation, inline.** The Geometry group
+   shows the *conduction equation*, because its sliders set the coordinates in
+   it — Radius bounds r, Height bounds z, and the equation switches between the
+   1-D and 2-D forms as you change shape. α = k/ρc_p sits with the food
+   properties; the convective boundary condition sits with *h*; the lethality
+   integral sits with T_ref and z. The maths is beside the sliders that feed it,
+   not in a separate column.
 2. **Hovering a control lights up its symbol everywhere it appears** — in the
    inline equation, in the full equation list below, and on the result tile it
    produces. Hovering *k* lights up *k* in α = k/ρc_p **and** in
@@ -32,23 +35,28 @@ Worth doing on the projector once, slowly, before any lesson content.
 
 ## Demonstrations that reliably produce an argument
 
-1. **Size dominates everything.** Drag the Radius slider from 43.7 mm to
-   ~143 mm. The can visibly fills the retort, the cold spot falls from about
-   90 °C to about 33 °C at the same instant, Bi goes 436 → 1428, and the F₀
-   tile flips to **under-processed**. Ask why tripling the radius did far worse
-   than tripling the time would fix — the answer is the L² in the Fourier
-   number, which is on screen in the Geometry group.
-2. **Money on the wrong resistance.** At the default Bi ≈ 436, drag *h* up and
+1. **Size dominates everything.** Drag the Radius slider from 43.7 mm to its
+   maximum, 90 mm. The retort does not move — it is fixed hardware — but the
+   can visibly fills much more of it, the cold spot falls from about 90 °C to
+   about 36 °C at the same instant, Bi goes 436 → 900, and the F₀ tile flips to
+   **under-processed**. Ask why doubling the radius did far more damage than
+   doubling the time would repair: the answer is the L² in the Fourier number.
+2. **The lids are not decoration.** Switch Shape from *Can* to *Cylinder* at
+   the same radius. The cold spot drops from about 90 °C to 85 °C, because the
+   infinite cylinder throws away the heat entering through both ends. That
+   difference is the whole second term of the 2-D equation shown in the
+   Geometry group.
+3. **Money on the wrong resistance.** At the default Bi ≈ 436, drag *h* up and
    down. Almost nothing happens. Ask what they would spend the money on
    instead. Then drop *h* to ~5 and watch Bi cross into the lumped regime and
    the badge change.
-3. **Steam versus water.** Switch the heating medium. It sets a representative
+4. **Steam versus water.** Switch the heating medium. It sets a representative
    *h* (6000 vs 1200 W/m²K) and the spray changes. Same can, same time — and
    F₀ barely moves. Why? Because at Bi ≫ 1 the film was never the bottleneck.
-4. **The cold spot is the process.** Scrub the timeline and watch the cutaway.
+5. **The cold spot is the process.** Scrub the timeline and watch the cutaway.
    Every number in Live results follows the scrubber, so the tile and the
    picture always describe the same instant.
-5. **F₀ arrives late.** Watch the F₀ plot stay flat on the axis and then leap.
+6. **F₀ arrives late.** Watch the F₀ plot stay flat on the axis and then leap.
    Almost all lethality is delivered in the last few degrees, which is why
    trimming "just a few minutes" is far more dangerous than it sounds.
 
@@ -64,6 +72,11 @@ Worth doing on the projector once, slowly, before any lesson content.
   notice the difference have found something real.
 - **Gauges show regime, not just value.** Bi and Fo each sit on a log scale
   with the teaching thresholds marked, so the number is read as a position.
+- **Fo and F₀ are different quantities that look alike.** *Fo* (roman “o”) is
+  the **Fourier number**, a dimensionless time. *F₀* (subscript zero) is
+  **lethality in equivalent minutes**. Worth saying out loud once — students
+  reliably read one as the other, and the two equation blocks now say so
+  explicitly in their notes.
 - **F₀ is only called F₀ on its own basis.** Move T_ref or z and the label
   changes to F(T_ref, z), because F₀ means 121.1 °C with z = 10 °C and nothing
   else.
@@ -82,9 +95,11 @@ physical reason we may treat *h* and T∞ as uniform in the maths. The air vent,
 steam valve and water valve are drawn and labelled; callouts stay attached as
 you orbit. The **Equipment** checkbox turns it all off.
 
-The vessel is fixed, like real hardware, and only grows once the food would
-otherwise not fit — so the size sliders change the food's share of the frame,
-which is the comparison they exist for.
+The vessel NEVER changes. It is fixed hardware, exactly as in a plant: you do
+not buy a new retort because you changed can size. Only the food changes size
+inside it, which is the comparison the size sliders exist for. The slider
+ranges are bounded so the food always fits: radius 10–90 mm covers every
+standard can (a No. 10 is 78 mm), and height 30–250 mm likewise.
 
 **Colour map.** Default is **Rainbow**, matching COMSOL and most simulation
 output. It is not perceptually uniform — the green band compresses a wide range

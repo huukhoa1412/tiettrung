@@ -237,12 +237,31 @@ function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 64 }) {
  * With a fixed scale, size is comparable across every setting and across every
  * geometry: a 5 mm sphere really is drawn a thirtieth the size of a 150 mm one.
  *
- * The constant is chosen so a standard 307x409 can (R = 43.65 mm) fills a bit
- * over half the retort bore -- large enough that the temperature field is
- * readable on a projector, while leaving room above and below for the slider
- * range to show a real difference.
+ * The constant is chosen so that the LARGEST food the sliders allow still fits
+ * inside the fixed retort, while a standard 307x409 can (R = 43.65 mm) is
+ * still large enough to read on a projector. With the retort bore at 1.85 and
+ * its half-span at 2.3 scene units:
+ *
+ *   default can  R = 43.65 mm -> 0.70  (38 % of the bore)
+ *   largest can  R = 90 mm    -> 1.44  (78 % of the bore)
+ *
+ * so the size sliders sweep the food across roughly half the vessel width, and
+ * nothing ever pokes through the wall.
  */
-export const SCENE_PER_METRE = 23;
+export const SCENE_PER_METRE = 16;
+
+/**
+ * Caps on the dimensions the model does NOT actually specify.
+ *
+ * An "infinite slab" has no width and an "infinite cylinder" has no length --
+ * those numbers are pictorial only, and the physics ignores them. Left
+ * uncapped they grow with the size slider and would push the drawing through
+ * the retort wall, so they are clamped to what the vessel can hold. The
+ * THICKNESS of the slab and the RADIUS of the cylinder are real and are never
+ * clamped.
+ */
+const MAX_PLATE_HALF_SPAN = 1.1; // circumscribed radius 1.1*sqrt(2) = 1.56 < bore
+const MAX_HALF_LENGTH = 2.0;
 
 /**
  * Build the mesh for the current geometry.
@@ -260,14 +279,16 @@ export function buildGeometryMesh(geometry, state, cut) {
   if (geometry === 'slab') {
     const L = state.halfThickness;
     // Show the slab as a plate wider than it is thick, which is what the
-    // "infinite slab" idealisation actually assumes.
-    const span = Math.max(L * 6, L * 2);
+    // "infinite slab" idealisation actually assumes. The WIDTH is pictorial
+    // and is capped to fit the vessel; the thickness is the physics and is not.
+    const halfSpan = Math.min(L * 3, MAX_PLATE_HALF_SPAN / s);
+    const span = halfSpan * 2;
     return {
       mesh: slabMesh({ halfThickness: L, width: span, height: span, cutAngle }),
       scale: s,
       // The plate's circumscribed radius in the horizontal plane.
-      outerRadius: (span / 2) * Math.SQRT2 * s,
-      halfHeight: (span / 2) * s,
+      outerRadius: halfSpan * Math.SQRT2 * s,
+      halfHeight: halfSpan * s,
     };
   }
 
@@ -282,9 +303,11 @@ export function buildGeometryMesh(geometry, state, cut) {
 
   const R = state.radius;
   const twoD = geometry === 'finiteCylinder';
-  // The infinite cylinder has no real length; draw it as tall as it is wide so
-  // nothing about the picture suggests the ends matter.
-  const halfHeight = twoD ? state.canHeight / 2 : R * 1.6;
+  // A finite cylinder has a real height. An infinite one does not: its drawn
+  // length is pictorial, so it is capped to fit the vessel.
+  const halfHeight = twoD
+    ? state.canHeight / 2
+    : Math.min(R * 1.6, MAX_HALF_LENGTH / s);
   return {
     mesh: cylinderMesh({ R, halfHeight, cutAngle, twoD }),
     scale: s,

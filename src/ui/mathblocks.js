@@ -25,7 +25,15 @@
 /* ------------------------------------------------------------------ */
 /* Symbol helpers. `key` is the state parameter this symbol represents. */
 
-/** A tagged identifier: <mi data-sym="k">k</mi> */
+/**
+ * A tagged identifier: <mi data-sym="k">k</mi>
+ *
+ * `key` may be a SPACE-SEPARATED LIST when one symbol stands for more than one
+ * control. The radial coordinate r, for instance, is bounded by the Radius
+ * slider for a cylinder or sphere and by the Half-thickness slider for a slab;
+ * both must light it up. Matching uses the `~=` attribute selector, which is
+ * defined on whitespace-separated lists.
+ */
 const S = (key, glyph) => `<mi class="sym" data-sym="${key}">${glyph}</mi>`;
 
 /** A tagged subscripted identifier, e.g. T_i or c_p. */
@@ -67,6 +75,33 @@ export const EQUATIONS = {
       'Raising c_p or ρ slows the food down even though it conducts just as well.',
   },
 
+  /**
+   * The 1-D conduction equation, shown beside the Geometry controls for the
+   * slab, the infinite cylinder and the sphere. `r` is the radial coordinate
+   * the Radius slider sets the outer limit of, so the connection between the
+   * control and the maths is direct.
+   */
+  conduction1D: {
+    title: 'Transient conduction',
+    params: ['k', 'rho', 'cp', 'alpha', 'radius', 'halfThickness'],
+    mathml: block(
+      row(
+        frac(row(O('∂'), I('T')), row(O('∂'), I('t'))),
+        O('='),
+        D('alpha', 'α'),
+        frac(N('1'), `<msup>${S('radius halfThickness', 'r')}<mi>m</mi></msup>`),
+        frac(O('∂'), row(O('∂'), S('radius halfThickness', 'r'))),
+        O('('),
+        `<msup>${S('radius halfThickness', 'r')}<mi>m</mi></msup>`,
+        frac(row(O('∂'), I('T')), row(O('∂'), S('radius halfThickness', 'r'))),
+        O(')'),
+      ),
+    ),
+    note:
+      'The shape exponent m is 0 for a slab, 1 for a cylinder and 2 for a sphere — the only thing that ' +
+      'changes between the three. r runs from the centre out to the radius (or half-thickness) you set above.',
+  },
+
   conduction2D: {
     title: 'Transient conduction in the can',
     params: ['k', 'rho', 'cp', 'alpha', 'radius', 'canHeight'],
@@ -76,11 +111,11 @@ export const EQUATIONS = {
         O('='),
         D('alpha', 'α'),
         O('['),
-        frac(N('1'), S('radius', 'r')),
-        frac(O('∂'), row(O('∂'), S('radius', 'r'))),
+        frac(N('1'), S('radius halfThickness', 'r')),
+        frac(O('∂'), row(O('∂'), S('radius halfThickness', 'r'))),
         O('('),
-        S('radius', 'r'),
-        frac(row(O('∂'), I('T')), row(O('∂'), S('radius', 'r'))),
+        S('radius halfThickness', 'r'),
+        frac(row(O('∂'), I('T')), row(O('∂'), S('radius halfThickness', 'r'))),
         O(')'),
         O('+'),
         frac(row(`<msup>${O('∂')}${N('2')}</msup>`, I('T')), row(O('∂'), `<msup>${S('canHeight', 'z')}${N('2')}</msup>`)),
@@ -122,10 +157,10 @@ export const EQUATIONS = {
       row(
         D('Bi', 'Bi'),
         O('='),
-        frac(row(S('h', 'h'), Ssub('radius', 'L', 'c')), S('k', 'k')),
+        frac(row(S('h', 'h'), Ssub('radius halfThickness', 'L', 'c')), S('k', 'k')),
         O('='),
         frac(
-          row(Ssub('radius', 'L', 'c'), O('/'), S('k', 'k')),
+          row(Ssub('radius halfThickness', 'L', 'c'), O('/'), S('k', 'k')),
           row(N('1'), O('/'), S('h', 'h')),
         ),
       ),
@@ -137,7 +172,7 @@ export const EQUATIONS = {
   },
 
   fourier: {
-    title: 'Fourier number — dimensionless time',
+    title: 'Fourier number Fo — dimensionless TIME',
     params: ['processTime', 'radius', 'halfThickness', 'alpha', 'Fo'],
     mathml: block(
       row(
@@ -145,22 +180,26 @@ export const EQUATIONS = {
         O('='),
         frac(
           row(D('alpha', 'α'), S('processTime', 't')),
-          `<msubsup>${I('L')}${I('c')}${N('2')}</msubsup>`,
+          `<msubsup class="sym" data-sym="radius halfThickness"><mi>L</mi><mi>c</mi><mn>2</mn></msubsup>`,
         ),
       ),
     ),
     note:
       'How far heat has diffused compared with how far it must go. Note the SQUARE: doubling the can radius ' +
-      'quadruples the time to reach the same Fo. This one fact explains most of thermal process design.',
+      'quadruples the time to reach the same Fo. This one fact explains most of thermal process design.\n\n' +
+      'Do not confuse Fo with F₀. Fo (roman “o”) is the Fourier number, a dimensionless time. ' +
+      'F₀ (subscript zero) is the accumulated lethality in equivalent minutes. They are unrelated quantities ' +
+      'that unfortunately look alike.',
   },
 
   lethality: {
-    title: 'Process lethality F₀',
+    title: 'Process lethality F₀ — equivalent MINUTES',
     params: ['Tref', 'zValue', 'processTime', 'targetF0', 'F0'],
     mathml: block(
       row(
-        D('F0', 'F'),
-        `<msub><mi></mi><mn>0</mn></msub>`,
+        // A proper msub, so it renders as F with a subscript zero and is
+        // visually distinct from the Fourier number Fo.
+        `<msub class="sym" data-sym="F0"><mi>F</mi><mn>0</mn></msub>`,
         O('='),
         `<msubsup><mo>∫</mo><mn>0</mn>${S('processTime', 't')}</msubsup>`,
         `<msup>${N('10')}<mrow>${frac(
@@ -173,7 +212,8 @@ export const EQUATIONS = {
     ),
     note:
       'Equivalent minutes at the reference temperature. Because the integrand is exponential, almost ALL ' +
-      'lethality is delivered in the last few degrees — which is why the curve stays flat and then leaps.',
+      'lethality is delivered in the last few degrees — which is why the curve stays flat and then leaps.\n\n' +
+      'F₀ (subscript zero) is a TIME IN MINUTES. It is not the Fourier number Fo, which is dimensionless.',
   },
 
   lumped: {
@@ -316,16 +356,32 @@ export const SCENARIO_EQUATIONS = {
  * The single equation shown INLINE beside each control group, so the maths sits
  * next to the sliders that drive it rather than in a separate column.
  */
+/**
+ * A group's entry may be a plain id or a function of state, for groups whose
+ * relevant equation depends on what is selected.
+ *
+ * The Geometry group shows the CONDUCTION equation, because that is the one
+ * whose coordinates its sliders actually set: Radius bounds r, Height bounds
+ * z. It previously showed the Fourier number, which was wrong twice over --
+ * Fo is about time, not geometry, and "Fo =" sitting under a Geometry heading
+ * reads as "F₀ =", the lethality symbol, which has nothing to do with either.
+ */
 export const GROUP_EQUATION = {
+  Geometry: (state) => (state.geometry === 'finiteCylinder' ? 'conduction2D' : 'conduction1D'),
   'Food properties': 'diffusivity',
   'Retort process': 'boundary',
   'Lethality basis': 'lethality',
-  Geometry: 'fourier',
   'Frozen properties': 'plank',
   'Blast chiller': 'boundary',
   'Plate pack': 'epsNtu',
   Arrangement: 'epsParallel',
 };
+
+/** Resolve a group's equation id for the current state. */
+export function groupEquationId(groupTitle, state) {
+  const entry = GROUP_EQUATION[groupTitle];
+  return typeof entry === 'function' ? entry(state) : entry;
+}
 
 /* ------------------------------------------------------------------ */
 /** Render one equation block. */
@@ -376,7 +432,7 @@ export function highlightSymbol(key) {
   }
   if (!key) return;
 
-  for (const el of document.querySelectorAll(`[data-sym="${key}"]`)) {
+  for (const el of document.querySelectorAll(`[data-sym~="${key}"]`)) {
     el.classList.add('is-active');
     // Mark the containing equation too, so the whole block lifts rather than
     // one glyph flickering inside an otherwise inert panel.

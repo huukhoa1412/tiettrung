@@ -14,7 +14,7 @@
  */
 
 import { clamp, UNITS } from '../core/units.js';
-import { renderEquation, highlightSymbol, GROUP_EQUATION } from './mathblocks.js';
+import { renderEquation, highlightSymbol, groupEquationId } from './mathblocks.js';
 
 /** Controls, grouped, per scenario. `visible` hides a control contextually. */
 export const CONTROL_SPEC = {
@@ -33,21 +33,24 @@ export const CONTROL_SPEC = {
             { value: 'sphere', label: 'Sphere' },
           ],
         },
+        // Ranges cover every standard can and still fit inside the fixed
+        // retort. A No. 10 can -- the largest in normal use -- is 157 mm in
+        // diameter by 178 mm tall, comfortably inside these limits.
         {
           key: 'radius', type: 'slider', label: 'Radius', sym: 'R', unit: UNITS.mm,
-          min: 0.005, max: 0.15, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
+          min: 0.01, max: 0.09, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
           visible: (s) => s.geometry !== 'slab',
-          hint: 'A 307×409 can has R = 43.65 mm.',
+          hint: 'A 307×409 can has R = 43.65 mm; a No. 10 can has R = 78 mm.',
         },
         {
           key: 'canHeight', type: 'slider', label: 'Height', sym: 'H', unit: UNITS.mm,
-          min: 0.02, max: 0.4, step: 0.001, scale: 'lin', display: 'mm', decimals: 1,
+          min: 0.03, max: 0.25, step: 0.001, scale: 'lin', display: 'mm', decimals: 1,
           visible: (s) => s.geometry === 'finiteCylinder',
           hint: 'Full height. The solver uses half of it, by symmetry about mid-height.',
         },
         {
           key: 'halfThickness', type: 'slider', label: 'Half-thickness', sym: 'L', unit: UNITS.mm,
-          min: 0.002, max: 0.1, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
+          min: 0.002, max: 0.05, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
           visible: (s) => s.geometry === 'slab',
           hint: 'Heated from both faces, so the characteristic length is HALF the slab.',
         },
@@ -340,12 +343,15 @@ function snapToBox(control, value) {
 export function createPanel(container, store, presets) {
   /** Rebuild rows whose visibility depends on other state. */
   const registry = [];
+  /** Per-group inline-equation updaters, for groups whose equation varies. */
+  const groupEquations = [];
 
   function build() {
     const state = store.get();
     const groups = CONTROL_SPEC[state.scenario] ?? [];
     container.innerHTML = '';
     registry.length = 0;
+    groupEquations.length = 0;
 
     for (const group of groups) {
       const section = document.createElement('div');
@@ -358,13 +364,22 @@ export function createPanel(container, store, presets) {
       // feed it. Keeping the maths beside the controls is the whole point:
       // a student should not have to look across the screen to find out what
       // the slider they are holding actually does.
-      const eqId = GROUP_EQUATION[group.title];
-      if (eqId) {
-        const holder = document.createElement('div');
-        holder.className = 'group-eq';
-        renderEquation(holder, eqId, { compact: true });
-        section.appendChild(holder);
-      }
+      //
+      // Some groups pick their equation from state (the Geometry group shows
+      // the 1-D or 2-D conduction equation depending on the shape), so the
+      // holder is registered and refreshed rather than rendered once.
+      const eqHolder = document.createElement('div');
+      eqHolder.className = 'group-eq';
+      section.appendChild(eqHolder);
+      let shownEq = null;
+      const updateGroupEquation = (s) => {
+        const id = groupEquationId(group.title, s);
+        if (id === shownEq) return;
+        shownEq = id;
+        eqHolder.innerHTML = '';
+        if (id) renderEquation(eqHolder, id, { compact: true });
+      };
+      groupEquations.push(updateGroupEquation);
 
       for (const control of group.controls) {
         const row = renderControl(control, store, presets);
@@ -382,6 +397,8 @@ export function createPanel(container, store, presets) {
   /** Push current state values into the widgets, and apply visibility rules. */
   function refresh() {
     const state = store.get();
+    // The Geometry group's equation follows the selected shape.
+    for (const update of groupEquations) update(state);
     for (const entry of registry) {
       const visible = entry.control.visible ? entry.control.visible(state) : true;
       entry.element.hidden = !visible;
