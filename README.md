@@ -4,9 +4,6 @@ An interactive teaching tool for undergraduate food engineering: transient
 conduction in canned foods, freezing with a phase-change plateau, and
 continuous pasteurisation in a plate heat exchanger.
 
-**Free, open, zero-install, and fully offline.** One HTML file, no dependencies,
-no build required to run it, no network access at any point.
-
 ---
 
 ## Running it
@@ -18,33 +15,7 @@ no build required to run it, no network access at any point.
 Nothing to download, nothing to install. Works on any computer, tablet or
 phone, and on any current browser.
 
-### Offline — from the file
 
-Download **`heat-transfer-simulator.html`**, then
-**right-click it → Open with → Chrome, Edge, Firefox or Safari.**
-
-> **Do not rely on double-clicking.** Windows frequently has `.html` associated
-> with Internet Explorer or a text editor rather than a real browser, and
-> **Internet Explorer cannot run this app** — it supports neither WebGL2, nor
-> modern JavaScript, nor MathML, so you get a blank or broken page. This is a
-> file-association problem on the computer, not a problem with the file.
->
-> To fix it permanently: right-click the file → *Open with* → *Choose another
-> app* → pick your browser → tick **Always use this app**.
-
-Once it is open it needs no network at all, so it runs from a USB stick or a
-lecture-theatre machine with no internet.
-
-### Rebuilding it after editing
-
-The source is modular; the deliverable is flattened. Node 18 or newer:
-
-```bash
-node build.mjs
-```
-
-This inlines every module and stylesheet into the single HTML file. The build
-script has **no dependencies** — there is no `npm install`, so nothing can rot.
 
 ### Checking the physics
 
