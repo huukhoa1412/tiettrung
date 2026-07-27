@@ -15,20 +15,6 @@ continuous pasteurisation in a plate heat exchanger.
 Nothing to download, nothing to install. Works on any computer, tablet or
 phone, and on any current browser.
 
-
-
-### Checking the physics
-
-```bash
-node test/validate.mjs
-```
-
-44 checks against analytical solutions, published tables and closed energy
-balances. Exit code 0 means all passed. See
-[docs/validation-note.md](docs/validation-note.md).
-
----
-
 ## What it covers
 
 **Retort sterilisation.** Transient conduction in a slab, infinite cylinder,
