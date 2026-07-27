@@ -179,21 +179,28 @@ function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 48 }) {
   const hw = width / 2;
   const hh = height / 2;
 
-  // THE CUTAWAY IS A CORNER NOTCH, NOT A ONE-SIDED SLICE.
+  // WHERE THE CUTAWAY IS ALLOWED TO CUT.
   //
-  // The cylinder and the sphere have a wedge removed about their axis, so
-  // material comes away symmetrically and the body stays centred in the
-  // vessel. The slab used to have everything beyond z = zc lopped off
-  // instead -- a one-sided cut, which walked the remaining body off-centre
-  // as the cut deepened (measured: bounding-box centre at z = -0.24 scene
-  // units at half cut, -0.48 at full). It visibly sat off to one side of
-  // the retort while every other shape sat in the middle.
+  // A cylinder's wedge is removed in THETA -- a direction along which the
+  // temperature does not vary. That is why it looks right: the cut never
+  // crosses a plane the physics cares about, and every exposed face still
+  // shows a complete radial profile.
   //
-  // Removing the quadrant x > 0, z > zc instead is the true analogue of the
-  // wedge: the plate keeps its full extent, only a corner is missing, and
-  // the centre stays at the origin for every cut setting. It also exposes
-  // two useful faces -- the mid-plane at x = 0 (the coldest plane) and a
-  // through-thickness section at z = zc.
+  // The slab's field varies along x ONLY, and it is mirror-symmetric about
+  // the mid-plane x = 0 because both faces are heated identically. So the
+  // cut must stay out of x entirely and take material in y and z, where
+  // nothing varies. Two earlier attempts got this wrong:
+  //   - slicing off everything beyond z = zc walked the body off-centre
+  //     (bounding-box centre reached -0.48 scene units at full cut);
+  //   - notching the corner x > 0, z > zc kept it centred but cut ACROSS
+  //     the mid-plane, leaving 98 vertices with no mirror twin and exposing
+  //     x = 0 as one large uniformly-cold face -- which makes a slab heated
+  //     on both faces look as though it is heated on one.
+  //
+  // Removing the quadrant y > 0, z > zc satisfies everything: the body stays
+  // centred, mirror symmetry about x = 0 is exact, and BOTH exposed faces
+  // run the full thickness, so each shows the complete hot-cold-hot profile
+  // that is the whole point of the slab problem.
   const frac = Math.min(0.5, cutAngle / Math.PI);
   const zc = hw - 2 * hw * frac;
   const notched = hw - zc > 1e-9;
@@ -221,30 +228,35 @@ function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 48 }) {
     b.grid(base, nu + 1, nv + 1, false);
   };
 
-  const half = Math.max(2, Math.round(xDiv / 2));
   const lerp = (a, c, t) => a + (c - a) * t;
 
-  // --- the two heated faces, x = +/- L (u is constant on each) ---
-  face(1, 1, (s, t) => [-L, lerp(-hh, hh, s), lerp(-hw, hw, t)], [-1, 0, 0]);
-  face(1, 1, (s, t) => [L, lerp(-hh, hh, s), lerp(-hw, zc, t)], [1, 0, 0]);
+  // --- the two heated faces, x = -L and x = +L ---
+  // u is constant (1) on each, so no subdivision is needed. Each is L-shaped
+  // once the notch bites, so it is emitted as the full-depth part plus the
+  // lower tongue. Both faces are built identically, which is what guarantees
+  // the mirror symmetry the physics has.
+  for (const [x, n] of [[-L, [-1, 0, 0]], [L, [1, 0, 0]]]) {
+    face(1, 1, (s, t) => [x, lerp(-hh, hh, s), lerp(-hw, zc, t)], n);
+    if (notched) face(1, 1, (s, t) => [x, lerp(-hh, 0, s), lerp(zc, hw, t)], n);
+  }
 
   // --- far end, z = -hw: spans the thickness, so subdivide in x ---
   face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(-hh, hh, t), -hw], [0, 0, -1]);
 
-  // --- near end, z = +hw: only the half that survives the notch ---
-  face(half, 1, (s, t) => [lerp(-L, 0, s), lerp(-hh, hh, t), hw], [0, 0, 1]);
+  // --- near end, z = +hw: only the lower half survives the notch ---
+  face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(-hh, notched ? 0 : hh, t), hw], [0, 0, 1]);
 
-  // --- top and bottom, both L-shaped: the full-width part, then the tongue ---
-  for (const [y, n] of [[hh, [0, 1, 0]], [-hh, [0, -1, 0]]]) {
-    face(xDiv, 1, (s, t) => [lerp(-L, L, s), y, lerp(-hw, zc, t)], n);
-    if (notched) face(half, 1, (s, t) => [lerp(-L, 0, s), y, lerp(zc, hw, t)], n);
-  }
+  // --- bottom, y = -hh: untouched by the notch ---
+  face(xDiv, 1, (s, t) => [lerp(-L, L, s), -hh, lerp(-hw, hw, t)], [0, -1, 0]);
+
+  // --- top, y = +hh: only up to the notch ---
+  face(xDiv, 1, (s, t) => [lerp(-L, L, s), hh, lerp(-hw, zc, t)], [0, 1, 0]);
 
   if (notched) {
-    // --- notch wall at z = zc: the through-thickness section ---
-    face(half, 1, (s, t) => [lerp(0, L, s), lerp(-hh, hh, t), zc], [0, 0, 1]);
-    // --- notch wall at x = 0: the mid-plane, uniformly at the centre value ---
-    face(1, 1, (s, t) => [0, lerp(-hh, hh, s), lerp(zc, hw, t)], [1, 0, 0]);
+    // Both cut faces run the FULL thickness, so each shows the complete
+    // hot-cold-hot profile rather than a single-temperature plane.
+    face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(0, hh, t), zc], [0, 0, 1]);
+    face(xDiv, 1, (s, t) => [lerp(-L, L, s), 0, lerp(zc, hw, t)], [0, 1, 0]);
   }
 
   return b.finish();
