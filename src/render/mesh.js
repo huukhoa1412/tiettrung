@@ -174,48 +174,77 @@ function sphereMesh({ R, cutAngle, segments = 120, phiDiv = 60, rDiv = 24 }) {
  * is exposed on a full-width face -- for a slab the cross-section IS the
  * lesson, so it is made the most visible surface.
  */
-function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 64 }) {
+function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 48 }) {
   const b = new MeshBuilder();
   const hw = width / 2;
   const hh = height / 2;
-  // cutAngle runs 0..pi; map it to how much of the depth is removed.
-  const frac = Math.min(0.98, cutAngle / Math.PI);
+
+  // THE CUTAWAY IS A CORNER NOTCH, NOT A ONE-SIDED SLICE.
+  //
+  // The cylinder and the sphere have a wedge removed about their axis, so
+  // material comes away symmetrically and the body stays centred in the
+  // vessel. The slab used to have everything beyond z = zc lopped off
+  // instead -- a one-sided cut, which walked the remaining body off-centre
+  // as the cut deepened (measured: bounding-box centre at z = -0.24 scene
+  // units at half cut, -0.48 at full). It visibly sat off to one side of
+  // the retort while every other shape sat in the middle.
+  //
+  // Removing the quadrant x > 0, z > zc instead is the true analogue of the
+  // wedge: the plate keeps its full extent, only a corner is missing, and
+  // the centre stays at the origin for every cut setting. It also exposes
+  // two useful faces -- the mid-plane at x = 0 (the coldest plane) and a
+  // through-thickness section at z = zc.
+  const frac = Math.min(0.5, cutAngle / Math.PI);
   const zc = hw - 2 * hw * frac;
+  const notched = hw - zc > 1e-9;
+
   const u = (x) => Math.min(1, Math.abs(x) / L);
 
-  const quad = (verts, nx, ny, nz, flip = false) => {
+  /**
+   * Emit a face as an (nu x nv) grid.
+   *
+   * Any face that SPANS the thickness must be subdivided: the field
+   * coordinate is |x|/L, which has a kink at the mid-plane. Drawn as a single
+   * quad it interpolates 1 -> 1 across the plate and renders the whole face at
+   * surface temperature, hiding the very gradient the picture exists to show.
+   * Back-face culling is off, so winding is irrelevant and only the normal
+   * matters for shading.
+   */
+  const face = (nu, nv, pt, n) => {
     const base = b.positions.length / 3;
-    for (const [x, y, z] of verts) b.vertex(x, y, z, nx, ny, nz, u(x), 0.5);
-    if (flip) {
-      b.triangle(base, base + 2, base + 1);
-      b.triangle(base, base + 3, base + 2);
-    } else {
-      b.triangle(base, base + 1, base + 2);
-      b.triangle(base, base + 2, base + 3);
+    for (let i = 0; i <= nu; i++) {
+      for (let j = 0; j <= nv; j++) {
+        const [x, y, z] = pt(i / nu, j / nv);
+        b.vertex(x, y, z, n[0], n[1], n[2], u(x), 0.5);
+      }
     }
+    b.grid(base, nu + 1, nv + 1, false);
   };
 
-  // The two heated faces, x = +/- L.
-  quad([[L, -hh, -hw], [L, -hh, zc], [L, hh, zc], [L, hh, -hw]], 1, 0, 0);
-  quad([[-L, -hh, -hw], [-L, -hh, zc], [-L, hh, zc], [-L, hh, -hw]], -1, 0, 0, true);
-  // Top and bottom.
-  quad([[-L, hh, -hw], [-L, hh, zc], [L, hh, zc], [L, hh, -hw]], 0, 1, 0, true);
-  quad([[-L, -hh, -hw], [-L, -hh, zc], [L, -hh, zc], [L, -hh, -hw]], 0, -1, 0);
-  // Far end.
-  quad([[-L, -hh, -hw], [L, -hh, -hw], [L, hh, -hw], [-L, hh, -hw]], 0, 0, -1, true);
+  const half = Math.max(2, Math.round(xDiv / 2));
+  const lerp = (a, c, t) => a + (c - a) * t;
 
-  // The cut face at z = zc, subdivided across the thickness so the gradient is
-  // sampled smoothly rather than interpolated across one big quad.
-  const base = b.positions.length / 3;
-  for (let i = 0; i <= xDiv; i++) {
-    const x = -L + (2 * L * i) / xDiv;
-    b.vertex(x, -hh, zc, 0, 0, 1, u(x), 0.5);
-    b.vertex(x, hh, zc, 0, 0, 1, u(x), 0.5);
+  // --- the two heated faces, x = +/- L (u is constant on each) ---
+  face(1, 1, (s, t) => [-L, lerp(-hh, hh, s), lerp(-hw, hw, t)], [-1, 0, 0]);
+  face(1, 1, (s, t) => [L, lerp(-hh, hh, s), lerp(-hw, zc, t)], [1, 0, 0]);
+
+  // --- far end, z = -hw: spans the thickness, so subdivide in x ---
+  face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(-hh, hh, t), -hw], [0, 0, -1]);
+
+  // --- near end, z = +hw: only the half that survives the notch ---
+  face(half, 1, (s, t) => [lerp(-L, 0, s), lerp(-hh, hh, t), hw], [0, 0, 1]);
+
+  // --- top and bottom, both L-shaped: the full-width part, then the tongue ---
+  for (const [y, n] of [[hh, [0, 1, 0]], [-hh, [0, -1, 0]]]) {
+    face(xDiv, 1, (s, t) => [lerp(-L, L, s), y, lerp(-hw, zc, t)], n);
+    if (notched) face(half, 1, (s, t) => [lerp(-L, 0, s), y, lerp(zc, hw, t)], n);
   }
-  for (let i = 0; i < xDiv; i++) {
-    const a = base + i * 2;
-    b.triangle(a, a + 1, a + 2);
-    b.triangle(a + 1, a + 3, a + 2);
+
+  if (notched) {
+    // --- notch wall at z = zc: the through-thickness section ---
+    face(half, 1, (s, t) => [lerp(0, L, s), lerp(-hh, hh, t), zc], [0, 0, 1]);
+    // --- notch wall at x = 0: the mid-plane, uniformly at the centre value ---
+    face(1, 1, (s, t) => [0, lerp(-hh, hh, s), lerp(zc, hw, t)], [1, 0, 0]);
   }
 
   return b.finish();

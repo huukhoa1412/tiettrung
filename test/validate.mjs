@@ -38,6 +38,8 @@ import {
   CHOI_OKOS_RANGE,
   FAT_K_AS_PRINTED,
 } from '../src/core/presets.js';
+import { buildGeometryMesh } from '../src/render/mesh.js';
+import { RETORT_BOUNDS } from '../src/render/equipment.js';
 
 // ---------------------------------------------------------------------------
 // Reporting
@@ -591,6 +593,64 @@ section('13. Food properties from composition (Choi–Okos 1986)');
   check('worst preset mass-fraction sum error', worstSum, COMPOSITION_TOLERANCE);
   check('computed cp vs ASHRAE Table 3 (relative)', worstCp, 0.05);
   info('note', 'frozen k is ~3.5x unfrozen because ice conducts far better than water');
+}
+
+// ===========================================================================
+section('14. Geometry meshes sit centred in the vessel');
+// The retort is fixed hardware, so the food must be centred in it for EVERY
+// shape and every cutaway setting. The cylinder and sphere remove a wedge
+// about their axis and stay centred for free; the slab originally lopped off
+// one whole side, which walked its centre away from the origin as the cut
+// deepened and made it visibly sit off to one side of the retort.
+{
+  const st = { halfThickness: 0.02, radius: 0.04365, canHeight: 0.1159 };
+  let worst = 0;
+  let worstCase = '';
+  for (const cut of [0, 0.25, 0.5, 0.75, 1]) {
+    for (const g of ['slab', 'sphere', 'cylinder', 'finiteCylinder']) {
+      const built = buildGeometryMesh(g, st, cut);
+      const p = built.mesh.positions;
+      const lo = [Infinity, Infinity, Infinity];
+      const hi = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < p.length; i += 3) {
+        for (let k = 0; k < 3; k++) {
+          if (p[i + k] < lo[k]) lo[k] = p[i + k];
+          if (p[i + k] > hi[k]) hi[k] = p[i + k];
+        }
+      }
+      // Offset of the bounding-box centre from the origin, in scene units.
+      const off = Math.hypot(
+        ((lo[0] + hi[0]) / 2) * built.scale,
+        ((lo[1] + hi[1]) / 2) * built.scale,
+        ((lo[2] + hi[2]) / 2) * built.scale,
+      );
+      if (off > worst) {
+        worst = off;
+        worstCase = `${g} at cut=${cut}`;
+      }
+    }
+  }
+  // 1e-3 scene units is far below one pixel; anything larger is a real offset,
+  // not tessellation round-off on a curved surface.
+  check('worst off-centre offset over all shapes and cuts', worst, 1e-3, worstCase);
+
+  // The food must also fit inside the fixed vessel at the largest settings the
+  // sliders allow, or it would be drawn poking through the retort wall.
+  const big = { halfThickness: 0.05, radius: 0.09, canHeight: 0.25 };
+  let worstFit = 0;
+  let fitCase = '';
+  for (const g of ['slab', 'sphere', 'cylinder', 'finiteCylinder']) {
+    const built = buildGeometryMesh(g, big, 0);
+    const rFrac = built.outerRadius / RETORT_BOUNDS.radius;
+    const hFrac = built.halfHeight / RETORT_BOUNDS.yTop;
+    const f = Math.max(rFrac, hFrac);
+    console.log(`         ${g.padEnd(15)} radius ${(rFrac * 100).toFixed(0)}% of bore, half-height ${(hFrac * 100).toFixed(0)}% of span`);
+    if (f > worstFit) {
+      worstFit = f;
+      fitCase = g;
+    }
+  }
+  check('largest food still inside the vessel', worstFit, 1.0, fitCase);
 }
 
 // ===========================================================================
