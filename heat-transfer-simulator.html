@@ -198,6 +198,27 @@ button, input, select { font: inherit; color: inherit; }
 .tab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .tab[aria-selected="true"] { background: var(--accent); color: var(--accent-text); }
 
+/* A scenario still under development: visible, but dimmed and not selectable. */
+.tab-soon, .tab-soon:hover {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: transparent;
+  color: var(--text-dim);
+}
+.tab-badge {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0.05em 0.45em;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  color: var(--text-dim);
+}
+
 .scenario-bar {
   display: flex;
   align-items: baseline;
@@ -874,26 +895,32 @@ const SCENARIOS = {
     label: 'Retort sterilisation',
     blurb: 'Canned food heated by saturated steam at 121 °C. Transient conduction with a convective boundary; lethality accumulates at the cold spot.',
     phase: 'solid',
+    // The only scenario in this build. Chill/freeze and the milk line are kept
+    // in the source (and still fully tested) but are still being developed, so
+    // their tabs are shown disabled rather than removed -- see buildTabs in
+    // main.js. Flip `available` to true to re-enable one.
+    available: true,
   },
   chill: {
     id: 'chill',
     label: 'Chill & freeze',
     blurb: 'Blast chilling of the same geometries, then freezing with a phase-change plateau from Plank’s equation.',
     phase: 'solid',
+    available: false,
   },
   milk: {
     id: 'milk',
     label: 'Milk line (HTST)',
     blurb: 'Continuous flow through a plate heat exchanger. 72 °C for 15 s; LMTD and ε-NTU, co-current versus counter-current.',
     phase: 'liquid',
+    available: false,
   },
 };
 
 const GEOMETRIES = {
   slab: { id: 'slab', label: 'Slab', note: 'Infinite slab, heated on both faces. Characteristic length = half-thickness.' },
-  cylinder: { id: 'cylinder', label: 'Infinite cylinder', note: 'Radial conduction only; the ends are ignored.' },
+  cylinder: { id: 'cylinder', label: 'Cylinder', note: 'Radial conduction only; the ends are ignored.' },
   sphere: { id: 'sphere', label: 'Sphere', note: 'The fastest-heating shape for a given size: most surface per unit volume.' },
-  finiteCylinder: { id: 'finiteCylinder', label: 'Finite cylinder (real can)', note: 'Two-dimensional: heat enters through the side wall and both lids.' },
 };
 
 /** Default state. Values that came from a cited source live in presets.js. */
@@ -902,10 +929,12 @@ function defaultState() {
     scenario: 'retort',
 
     // --- Geometry ---
-    geometry: 'finiteCylinder',
+    // Cylinder (infinite, radial conduction) is the default retort shape: the
+    // classic textbook idealisation of a can. Slab and sphere are the other two.
+    geometry: 'cylinder',
     radius: 0.04365, // m, 307x409 can
-    halfThickness: 0.02, // m, used by the slab
-    canHeight: 0.1159, // m, full height of the can
+    halfThickness: 0.0125, // m, half of a 25 mm slab
+    canHeight: 0.1159, // m, unused by the exposed shapes; kept for internal code paths
 
     // --- Food properties (overwritten by a preset) ---
     presetId: 'cannedPeas',
@@ -3702,7 +3731,7 @@ const EQUATIONS = {
 
 /** Which equations belong to which scenario, in teaching order. */
 const SCENARIO_EQUATIONS = {
-  retort: ['diffusivity', 'conduction2D', 'boundary', 'biot', 'fourier', 'series', 'lumped', 'lethality'],
+  retort: ['diffusivity', 'conduction1D', 'boundary', 'biot', 'fourier', 'series', 'lumped', 'lethality'],
   chill: ['diffusivity', 'boundary', 'biot', 'plank'],
   milk: ['lmtd', 'epsNtu', 'epsParallel'],
 };
@@ -3722,7 +3751,7 @@ const SCENARIO_EQUATIONS = {
  * reads as "F₀ =", the lethality symbol, which has nothing to do with either.
  */
 const GROUP_EQUATION = {
-  Geometry: (state) => (state.geometry === 'finiteCylinder' ? 'conduction2D' : 'conduction1D'),
+  Geometry: () => 'conduction1D',
   'Food properties': 'diffusivity',
   'Retort process': 'boundary',
   'Lethality basis': 'lethality',
@@ -3846,11 +3875,11 @@ const CONTROL_SPEC = {
           type: 'segmented',
           label: 'Shape',
           options: [
-            { value: 'finiteCylinder', label: 'Can' },
             { value: 'cylinder', label: 'Cylinder' },
             { value: 'slab', label: 'Slab' },
             { value: 'sphere', label: 'Sphere' },
           ],
+          hint: 'The three classic idealised shapes. A real can is the cylinder with its ends ignored — radial conduction only.',
         },
         // Ranges cover every standard can and still fit inside the fixed
         // retort. A No. 10 can -- the largest in normal use -- is 157 mm in
@@ -3860,12 +3889,6 @@ const CONTROL_SPEC = {
           min: 0.01, max: 0.09, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
           visible: (s) => s.geometry !== 'slab',
           hint: 'A 307×409 can has R = 43.65 mm; a No. 10 can has R = 78 mm.',
-        },
-        {
-          key: 'canHeight', type: 'slider', label: 'Height', sym: 'H', unit: UNITS.mm,
-          min: 0.03, max: 0.25, step: 0.001, scale: 'lin', display: 'mm', decimals: 1,
-          visible: (s) => s.geometry === 'finiteCylinder',
-          hint: 'Full height. The solver uses half of it, by symmetry about mid-height.',
         },
         {
           key: 'halfThickness', type: 'slider', label: 'Half-thickness', sym: 'L', unit: UNITS.mm,
@@ -8037,15 +8060,17 @@ function sphereMesh({ R, cutAngle, segments = 120, phiDiv = 60, rDiv = 24 }) {
 
 /* ------------------------------------------------------------------ */
 /**
- * Slab: a rectangular block whose temperature varies only through its
- * thickness. The cut removes the near half so the through-thickness gradient
- * is exposed on a full-width face -- for a slab the cross-section IS the
- * lesson, so it is made the most visible surface.
+ * Slab: a broad, flat, HORIZONTAL plate whose temperature varies only through
+ * its thickness -- the canonical "infinite slab heated on both faces". The two
+ * big faces are the top and bottom (y = +/- L); the thickness is the vertical
+ * dimension, which is the characteristic length. Drawn flat and wide so it
+ * reads unmistakably as a slab and never as a cube or a cylinder, and so the
+ * thickness slider visibly changes how thin the sheet is.
  */
-function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 48 }) {
+function slabMesh({ halfThickness: L, width, depth, cutAngle, nDiv = 48 }) {
   const b = new MeshBuilder();
-  const hw = width / 2;
-  const hh = height / 2;
+  const hw = width / 2; // half-extent along x (a broad horizontal dimension)
+  const hd = depth / 2; // half-extent along z (the other broad dimension)
 
   // WHERE THE CUTAWAY IS ALLOWED TO CUT.
   //
@@ -8054,43 +8079,37 @@ function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 48 }) {
   // crosses a plane the physics cares about, and every exposed face still
   // shows a complete radial profile.
   //
-  // The slab's field varies along x ONLY, and it is mirror-symmetric about
-  // the mid-plane x = 0 because both faces are heated identically. So the
-  // cut must stay out of x entirely and take material in y and z, where
-  // nothing varies. Two earlier attempts got this wrong:
-  //   - slicing off everything beyond z = zc walked the body off-centre
-  //     (bounding-box centre reached -0.48 scene units at full cut);
-  //   - notching the corner x > 0, z > zc kept it centred but cut ACROSS
-  //     the mid-plane, leaving 98 vertices with no mirror twin and exposing
-  //     x = 0 as one large uniformly-cold face -- which makes a slab heated
-  //     on both faces look as though it is heated on one.
-  //
-  // Removing the quadrant y > 0, z > zc satisfies everything: the body stays
-  // centred, mirror symmetry about x = 0 is exact, and BOTH exposed faces
-  // run the full thickness, so each shows the complete hot-cold-hot profile
-  // that is the whole point of the slab problem.
+  // The slab's field varies along y ONLY (the thickness), and it is
+  // mirror-symmetric about the mid-plane y = 0 because both faces are heated
+  // identically. So the cut must stay out of y entirely and take material in
+  // x and z, where nothing varies. Removing the horizontal corner x > 0,
+  // z > zc keeps the body centred, keeps mirror symmetry about y = 0 exact,
+  // and leaves BOTH exposed cut faces running the full thickness, so each
+  // shows the complete hot-cold-hot profile that is the whole point of the
+  // slab problem.
   const frac = Math.min(0.5, cutAngle / Math.PI);
-  const zc = hw - 2 * hw * frac;
-  const notched = hw - zc > 1e-9;
+  const zc = hd - 2 * hd * frac;
+  const notched = hd - zc > 1e-9;
 
-  const u = (x) => Math.min(1, Math.abs(x) / L);
+  const u = (y) => Math.min(1, Math.abs(y) / L);
 
   /**
    * Emit a face as an (nu x nv) grid.
    *
-   * Any face that SPANS the thickness must be subdivided: the field
-   * coordinate is |x|/L, which has a kink at the mid-plane. Drawn as a single
+   * Any face that SPANS the thickness must be subdivided along it: the field
+   * coordinate is |y|/L, which has a kink at the mid-plane. Drawn as a single
    * quad it interpolates 1 -> 1 across the plate and renders the whole face at
    * surface temperature, hiding the very gradient the picture exists to show.
-   * Back-face culling is off, so winding is irrelevant and only the normal
-   * matters for shading.
+   * The convention here is that the FIRST parameter (s) runs along the
+   * thickness wherever a face spans it. Back-face culling is off, so winding
+   * is irrelevant and only the normal matters for shading.
    */
   const face = (nu, nv, pt, n) => {
     const base = b.positions.length / 3;
     for (let i = 0; i <= nu; i++) {
       for (let j = 0; j <= nv; j++) {
         const [x, y, z] = pt(i / nu, j / nv);
-        b.vertex(x, y, z, n[0], n[1], n[2], u(x), 0.5);
+        b.vertex(x, y, z, n[0], n[1], n[2], u(y), 0.5);
       }
     }
     b.grid(base, nu + 1, nv + 1, false);
@@ -8098,33 +8117,33 @@ function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 48 }) {
 
   const lerp = (a, c, t) => a + (c - a) * t;
 
-  // --- the two heated faces, x = -L and x = +L ---
+  // --- the two heated faces, y = -L (bottom) and y = +L (top) ---
   // u is constant (1) on each, so no subdivision is needed. Each is L-shaped
-  // once the notch bites, so it is emitted as the full-depth part plus the
-  // lower tongue. Both faces are built identically, which is what guarantees
-  // the mirror symmetry the physics has.
-  for (const [x, n] of [[-L, [-1, 0, 0]], [L, [1, 0, 0]]]) {
-    face(1, 1, (s, t) => [x, lerp(-hh, hh, s), lerp(-hw, zc, t)], n);
-    if (notched) face(1, 1, (s, t) => [x, lerp(-hh, 0, s), lerp(zc, hw, t)], n);
+  // once the notch bites, so it is emitted as the full part plus the tongue at
+  // x < 0. Both faces are built identically, which is what guarantees the
+  // mirror symmetry the physics has.
+  for (const [y, n] of [[-L, [0, -1, 0]], [L, [0, 1, 0]]]) {
+    face(1, 1, (s, t) => [lerp(-hw, hw, s), y, lerp(-hd, zc, t)], n);
+    if (notched) face(1, 1, (s, t) => [lerp(-hw, 0, s), y, lerp(zc, hd, t)], n);
   }
 
-  // --- far end, z = -hw: spans the thickness, so subdivide in x ---
-  face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(-hh, hh, t), -hw], [0, 0, -1]);
+  // --- far edge, z = -hd: spans the thickness, so subdivide in y ---
+  face(nDiv, 1, (s, t) => [lerp(-hw, hw, t), lerp(-L, L, s), -hd], [0, 0, -1]);
 
-  // --- near end, z = +hw: only the lower half survives the notch ---
-  face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(-hh, notched ? 0 : hh, t), hw], [0, 0, 1]);
+  // --- near edge, z = +hd: only the x < 0 half survives the notch ---
+  face(nDiv, 1, (s, t) => [lerp(-hw, notched ? 0 : hw, t), lerp(-L, L, s), hd], [0, 0, 1]);
 
-  // --- bottom, y = -hh: untouched by the notch ---
-  face(xDiv, 1, (s, t) => [lerp(-L, L, s), -hh, lerp(-hw, hw, t)], [0, -1, 0]);
+  // --- left edge, x = -hw: untouched by the notch ---
+  face(nDiv, 1, (s, t) => [-hw, lerp(-L, L, s), lerp(-hd, hd, t)], [-1, 0, 0]);
 
-  // --- top, y = +hh: only up to the notch ---
-  face(xDiv, 1, (s, t) => [lerp(-L, L, s), hh, lerp(-hw, zc, t)], [0, 1, 0]);
+  // --- right edge, x = +hw: only up to the notch (z < zc) ---
+  face(nDiv, 1, (s, t) => [hw, lerp(-L, L, s), lerp(-hd, zc, t)], [1, 0, 0]);
 
   if (notched) {
     // Both cut faces run the FULL thickness, so each shows the complete
     // hot-cold-hot profile rather than a single-temperature plane.
-    face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(0, hh, t), zc], [0, 0, 1]);
-    face(xDiv, 1, (s, t) => [lerp(-L, L, s), 0, lerp(zc, hw, t)], [0, 1, 0]);
+    face(nDiv, 1, (s, t) => [lerp(0, hw, t), lerp(-L, L, s), zc], [0, 0, 1]);
+    face(nDiv, 1, (s, t) => [0, lerp(-L, L, s), lerp(zc, hd, t)], [1, 0, 0]);
   }
 
   return b.finish();
@@ -8187,17 +8206,26 @@ function buildGeometryMesh(geometry, state, cut) {
 
   if (geometry === 'slab') {
     const L = state.halfThickness;
-    // Show the slab as a plate wider than it is thick, which is what the
-    // "infinite slab" idealisation actually assumes. The WIDTH is pictorial
-    // and is capped to fit the vessel; the thickness is the physics and is not.
-    const halfSpan = Math.min(L * 3, MAX_PLATE_HALF_SPAN / s);
+    // Show the slab as a broad, flat plate, which is what the "infinite slab"
+    // idealisation actually assumes: the width is NOTIONALLY INFINITE, so it is
+    // drawn as wide as the vessel allows and does NOT track the thickness. The
+    // thickness (2L) is the physics and is the only dimension the slider moves.
+    //
+    // An earlier version tied the half-width to 3*L. That made the plate a
+    // fixed ~3:1 block at every setting -- a thin slab came out as a tiny chip
+    // and a thick one as a cube, so the picture never read as a slab and the
+    // thickness slider changed the whole size rather than just the thinness.
+    // Pinning the width makes a thin slab look like a wide sheet and a thick
+    // one like a thick plate, which is the distinction that matters.
+    const halfSpan = MAX_PLATE_HALF_SPAN / s;
     const span = halfSpan * 2;
     return {
-      mesh: slabMesh({ halfThickness: L, width: span, height: span, cutAngle }),
+      mesh: slabMesh({ halfThickness: L, width: span, depth: span, cutAngle }),
       scale: s,
-      // The plate's circumscribed radius in the horizontal plane.
+      // The plate lies flat: its horizontal footprint is the broad span, and
+      // its vertical half-height is the (small) half-thickness.
       outerRadius: halfSpan * Math.SQRT2 * s,
-      halfHeight: halfSpan * s,
+      halfHeight: L * s,
     };
   }
 
@@ -9136,8 +9164,12 @@ function createStage(container, store) {
     // is shown and what medium runs through it -- never on the food. Keying it
     // to the food size rebuilt the retort on every size change, which is
     // exactly what made the food appear not to change size at all.
+    // Geometry is in the key only because the product callout names the shape
+    // ("product (slab)"); the vessel itself is unchanged by it. Switching shape
+    // is rare, so rebuilding the fixed hardware then costs nothing, and it
+    // keeps the label honest instead of leaving it reading the previous shape.
     const wantEquip = gl && state.showEquipment
-      ? [state.scenario, state.heatingMedium].join(':')
+      ? [state.scenario, state.heatingMedium, geometry].join(':')
       : 'none';
     if (wantEquip !== equipKey || force) {
       if (gl) {
@@ -9283,7 +9315,7 @@ function createStage(container, store) {
     const equip = usingWebGL && state.showEquipment ? equipmentLabel(state.scenario) : '';
     const mediumText =
       showMedium && MEDIA[state.heatingMedium]
-        ? ` · ${MEDIA[state.heatingMedium].label.toLowerCase()} at ${state.Tmedium.toFixed(1)} °C circulating around the can`
+        ? ` · ${MEDIA[state.heatingMedium].label.toLowerCase()} at ${state.Tmedium.toFixed(1)} °C circulating around the ${productNoun(geometry)}`
         : '';
     caption.textContent = usingWebGL
       ? `Drag to orbit · scroll to zoom${equip ? ` · inside ${equip}` : ''}${mediumText}`
@@ -9363,13 +9395,28 @@ function boot() {
       b.className = 'tab';
       b.type = 'button';
       b.setAttribute('role', 'tab');
-      b.textContent = item.label;
-      b.addEventListener('click', () => store.set({ [key]: item.id }));
+      // A scenario still under development is shown but not selectable, so the
+      // demo cannot wander into an unfinished screen while the tab still
+      // advertises that the work exists. `available === false` gates it; any
+      // other value (including undefined) stays selectable.
+      const available = item.available !== false;
+      if (available) {
+        b.textContent = item.label;
+        b.addEventListener('click', () => store.set({ [key]: item.id }));
+      } else {
+        b.classList.add('tab-soon');
+        b.disabled = true;
+        b.setAttribute('aria-disabled', 'true');
+        b.title = 'In development — not available in this build yet';
+        b.innerHTML = `${item.label} <span class="tab-badge">in development</span>`;
+      }
       container.appendChild(b);
-      return { b, id: item.id };
+      return { b, id: item.id, available };
     });
     return (state) => {
-      for (const { b, id } of buttons) b.setAttribute('aria-selected', String(state[key] === id));
+      for (const { b, id, available } of buttons) {
+        b.setAttribute('aria-selected', String(available && state[key] === id));
+      }
     };
   }
 

@@ -347,7 +347,7 @@ export const EQUATIONS = {
 
 /** Which equations belong to which scenario, in teaching order. */
 export const SCENARIO_EQUATIONS = {
-  retort: ['diffusivity', 'conduction2D', 'boundary', 'biot', 'fourier', 'series', 'lumped', 'lethality'],
+  retort: ['diffusivity', 'conduction1D', 'boundary', 'biot', 'fourier', 'series', 'lumped', 'lethality'],
   chill: ['diffusivity', 'boundary', 'biot', 'plank'],
   milk: ['lmtd', 'epsNtu', 'epsParallel'],
 };
@@ -367,7 +367,7 @@ export const SCENARIO_EQUATIONS = {
  * reads as "F₀ =", the lethality symbol, which has nothing to do with either.
  */
 export const GROUP_EQUATION = {
-  Geometry: (state) => (state.geometry === 'finiteCylinder' ? 'conduction2D' : 'conduction1D'),
+  Geometry: () => 'conduction1D',
   'Food properties': 'diffusivity',
   'Retort process': 'boundary',
   'Lethality basis': 'lethality',

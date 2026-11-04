@@ -38,26 +38,32 @@ export const SCENARIOS = {
     label: 'Retort sterilisation',
     blurb: 'Canned food heated by saturated steam at 121 °C. Transient conduction with a convective boundary; lethality accumulates at the cold spot.',
     phase: 'solid',
+    // The only scenario in this build. Chill/freeze and the milk line are kept
+    // in the source (and still fully tested) but are still being developed, so
+    // their tabs are shown disabled rather than removed -- see buildTabs in
+    // main.js. Flip `available` to true to re-enable one.
+    available: true,
   },
   chill: {
     id: 'chill',
     label: 'Chill & freeze',
     blurb: 'Blast chilling of the same geometries, then freezing with a phase-change plateau from Plank’s equation.',
     phase: 'solid',
+    available: false,
   },
   milk: {
     id: 'milk',
     label: 'Milk line (HTST)',
     blurb: 'Continuous flow through a plate heat exchanger. 72 °C for 15 s; LMTD and ε-NTU, co-current versus counter-current.',
     phase: 'liquid',
+    available: false,
   },
 };
 
 export const GEOMETRIES = {
   slab: { id: 'slab', label: 'Slab', note: 'Infinite slab, heated on both faces. Characteristic length = half-thickness.' },
-  cylinder: { id: 'cylinder', label: 'Infinite cylinder', note: 'Radial conduction only; the ends are ignored.' },
+  cylinder: { id: 'cylinder', label: 'Cylinder', note: 'Radial conduction only; the ends are ignored.' },
   sphere: { id: 'sphere', label: 'Sphere', note: 'The fastest-heating shape for a given size: most surface per unit volume.' },
-  finiteCylinder: { id: 'finiteCylinder', label: 'Finite cylinder (real can)', note: 'Two-dimensional: heat enters through the side wall and both lids.' },
 };
 
 /** Default state. Values that came from a cited source live in presets.js. */
@@ -66,10 +72,12 @@ export function defaultState() {
     scenario: 'retort',
 
     // --- Geometry ---
-    geometry: 'finiteCylinder',
+    // Cylinder (infinite, radial conduction) is the default retort shape: the
+    // classic textbook idealisation of a can. Slab and sphere are the other two.
+    geometry: 'cylinder',
     radius: 0.04365, // m, 307x409 can
-    halfThickness: 0.02, // m, used by the slab
-    canHeight: 0.1159, // m, full height of the can
+    halfThickness: 0.0125, // m, half of a 25 mm slab
+    canHeight: 0.1159, // m, unused by the exposed shapes; kept for internal code paths
 
     // --- Food properties (overwritten by a preset) ---
     presetId: 'cannedPeas',

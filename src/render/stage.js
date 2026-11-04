@@ -248,8 +248,12 @@ export function createStage(container, store) {
     // is shown and what medium runs through it -- never on the food. Keying it
     // to the food size rebuilt the retort on every size change, which is
     // exactly what made the food appear not to change size at all.
+    // Geometry is in the key only because the product callout names the shape
+    // ("product (slab)"); the vessel itself is unchanged by it. Switching shape
+    // is rare, so rebuilding the fixed hardware then costs nothing, and it
+    // keeps the label honest instead of leaving it reading the previous shape.
     const wantEquip = gl && state.showEquipment
-      ? [state.scenario, state.heatingMedium].join(':')
+      ? [state.scenario, state.heatingMedium, geometry].join(':')
       : 'none';
     if (wantEquip !== equipKey || force) {
       if (gl) {
@@ -395,7 +399,7 @@ export function createStage(container, store) {
     const equip = usingWebGL && state.showEquipment ? equipmentLabel(state.scenario) : '';
     const mediumText =
       showMedium && MEDIA[state.heatingMedium]
-        ? ` · ${MEDIA[state.heatingMedium].label.toLowerCase()} at ${state.Tmedium.toFixed(1)} °C circulating around the can`
+        ? ` · ${MEDIA[state.heatingMedium].label.toLowerCase()} at ${state.Tmedium.toFixed(1)} °C circulating around the ${productNoun(geometry)}`
         : '';
     caption.textContent = usingWebGL
       ? `Drag to orbit · scroll to zoom${equip ? ` · inside ${equip}` : ''}${mediumText}`

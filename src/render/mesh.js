@@ -169,15 +169,17 @@ function sphereMesh({ R, cutAngle, segments = 120, phiDiv = 60, rDiv = 24 }) {
 
 /* ------------------------------------------------------------------ */
 /**
- * Slab: a rectangular block whose temperature varies only through its
- * thickness. The cut removes the near half so the through-thickness gradient
- * is exposed on a full-width face -- for a slab the cross-section IS the
- * lesson, so it is made the most visible surface.
+ * Slab: a broad, flat, HORIZONTAL plate whose temperature varies only through
+ * its thickness -- the canonical "infinite slab heated on both faces". The two
+ * big faces are the top and bottom (y = +/- L); the thickness is the vertical
+ * dimension, which is the characteristic length. Drawn flat and wide so it
+ * reads unmistakably as a slab and never as a cube or a cylinder, and so the
+ * thickness slider visibly changes how thin the sheet is.
  */
-function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 48 }) {
+function slabMesh({ halfThickness: L, width, depth, cutAngle, nDiv = 48 }) {
   const b = new MeshBuilder();
-  const hw = width / 2;
-  const hh = height / 2;
+  const hw = width / 2; // half-extent along x (a broad horizontal dimension)
+  const hd = depth / 2; // half-extent along z (the other broad dimension)
 
   // WHERE THE CUTAWAY IS ALLOWED TO CUT.
   //
@@ -186,43 +188,37 @@ function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 48 }) {
   // crosses a plane the physics cares about, and every exposed face still
   // shows a complete radial profile.
   //
-  // The slab's field varies along x ONLY, and it is mirror-symmetric about
-  // the mid-plane x = 0 because both faces are heated identically. So the
-  // cut must stay out of x entirely and take material in y and z, where
-  // nothing varies. Two earlier attempts got this wrong:
-  //   - slicing off everything beyond z = zc walked the body off-centre
-  //     (bounding-box centre reached -0.48 scene units at full cut);
-  //   - notching the corner x > 0, z > zc kept it centred but cut ACROSS
-  //     the mid-plane, leaving 98 vertices with no mirror twin and exposing
-  //     x = 0 as one large uniformly-cold face -- which makes a slab heated
-  //     on both faces look as though it is heated on one.
-  //
-  // Removing the quadrant y > 0, z > zc satisfies everything: the body stays
-  // centred, mirror symmetry about x = 0 is exact, and BOTH exposed faces
-  // run the full thickness, so each shows the complete hot-cold-hot profile
-  // that is the whole point of the slab problem.
+  // The slab's field varies along y ONLY (the thickness), and it is
+  // mirror-symmetric about the mid-plane y = 0 because both faces are heated
+  // identically. So the cut must stay out of y entirely and take material in
+  // x and z, where nothing varies. Removing the horizontal corner x > 0,
+  // z > zc keeps the body centred, keeps mirror symmetry about y = 0 exact,
+  // and leaves BOTH exposed cut faces running the full thickness, so each
+  // shows the complete hot-cold-hot profile that is the whole point of the
+  // slab problem.
   const frac = Math.min(0.5, cutAngle / Math.PI);
-  const zc = hw - 2 * hw * frac;
-  const notched = hw - zc > 1e-9;
+  const zc = hd - 2 * hd * frac;
+  const notched = hd - zc > 1e-9;
 
-  const u = (x) => Math.min(1, Math.abs(x) / L);
+  const u = (y) => Math.min(1, Math.abs(y) / L);
 
   /**
    * Emit a face as an (nu x nv) grid.
    *
-   * Any face that SPANS the thickness must be subdivided: the field
-   * coordinate is |x|/L, which has a kink at the mid-plane. Drawn as a single
+   * Any face that SPANS the thickness must be subdivided along it: the field
+   * coordinate is |y|/L, which has a kink at the mid-plane. Drawn as a single
    * quad it interpolates 1 -> 1 across the plate and renders the whole face at
    * surface temperature, hiding the very gradient the picture exists to show.
-   * Back-face culling is off, so winding is irrelevant and only the normal
-   * matters for shading.
+   * The convention here is that the FIRST parameter (s) runs along the
+   * thickness wherever a face spans it. Back-face culling is off, so winding
+   * is irrelevant and only the normal matters for shading.
    */
   const face = (nu, nv, pt, n) => {
     const base = b.positions.length / 3;
     for (let i = 0; i <= nu; i++) {
       for (let j = 0; j <= nv; j++) {
         const [x, y, z] = pt(i / nu, j / nv);
-        b.vertex(x, y, z, n[0], n[1], n[2], u(x), 0.5);
+        b.vertex(x, y, z, n[0], n[1], n[2], u(y), 0.5);
       }
     }
     b.grid(base, nu + 1, nv + 1, false);
@@ -230,33 +226,33 @@ function slabMesh({ halfThickness: L, width, height, cutAngle, xDiv = 48 }) {
 
   const lerp = (a, c, t) => a + (c - a) * t;
 
-  // --- the two heated faces, x = -L and x = +L ---
+  // --- the two heated faces, y = -L (bottom) and y = +L (top) ---
   // u is constant (1) on each, so no subdivision is needed. Each is L-shaped
-  // once the notch bites, so it is emitted as the full-depth part plus the
-  // lower tongue. Both faces are built identically, which is what guarantees
-  // the mirror symmetry the physics has.
-  for (const [x, n] of [[-L, [-1, 0, 0]], [L, [1, 0, 0]]]) {
-    face(1, 1, (s, t) => [x, lerp(-hh, hh, s), lerp(-hw, zc, t)], n);
-    if (notched) face(1, 1, (s, t) => [x, lerp(-hh, 0, s), lerp(zc, hw, t)], n);
+  // once the notch bites, so it is emitted as the full part plus the tongue at
+  // x < 0. Both faces are built identically, which is what guarantees the
+  // mirror symmetry the physics has.
+  for (const [y, n] of [[-L, [0, -1, 0]], [L, [0, 1, 0]]]) {
+    face(1, 1, (s, t) => [lerp(-hw, hw, s), y, lerp(-hd, zc, t)], n);
+    if (notched) face(1, 1, (s, t) => [lerp(-hw, 0, s), y, lerp(zc, hd, t)], n);
   }
 
-  // --- far end, z = -hw: spans the thickness, so subdivide in x ---
-  face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(-hh, hh, t), -hw], [0, 0, -1]);
+  // --- far edge, z = -hd: spans the thickness, so subdivide in y ---
+  face(nDiv, 1, (s, t) => [lerp(-hw, hw, t), lerp(-L, L, s), -hd], [0, 0, -1]);
 
-  // --- near end, z = +hw: only the lower half survives the notch ---
-  face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(-hh, notched ? 0 : hh, t), hw], [0, 0, 1]);
+  // --- near edge, z = +hd: only the x < 0 half survives the notch ---
+  face(nDiv, 1, (s, t) => [lerp(-hw, notched ? 0 : hw, t), lerp(-L, L, s), hd], [0, 0, 1]);
 
-  // --- bottom, y = -hh: untouched by the notch ---
-  face(xDiv, 1, (s, t) => [lerp(-L, L, s), -hh, lerp(-hw, hw, t)], [0, -1, 0]);
+  // --- left edge, x = -hw: untouched by the notch ---
+  face(nDiv, 1, (s, t) => [-hw, lerp(-L, L, s), lerp(-hd, hd, t)], [-1, 0, 0]);
 
-  // --- top, y = +hh: only up to the notch ---
-  face(xDiv, 1, (s, t) => [lerp(-L, L, s), hh, lerp(-hw, zc, t)], [0, 1, 0]);
+  // --- right edge, x = +hw: only up to the notch (z < zc) ---
+  face(nDiv, 1, (s, t) => [hw, lerp(-L, L, s), lerp(-hd, zc, t)], [1, 0, 0]);
 
   if (notched) {
     // Both cut faces run the FULL thickness, so each shows the complete
     // hot-cold-hot profile rather than a single-temperature plane.
-    face(xDiv, 1, (s, t) => [lerp(-L, L, s), lerp(0, hh, t), zc], [0, 0, 1]);
-    face(xDiv, 1, (s, t) => [lerp(-L, L, s), 0, lerp(zc, hw, t)], [0, 1, 0]);
+    face(nDiv, 1, (s, t) => [lerp(0, hw, t), lerp(-L, L, s), zc], [0, 0, 1]);
+    face(nDiv, 1, (s, t) => [0, lerp(-L, L, s), lerp(zc, hd, t)], [1, 0, 0]);
   }
 
   return b.finish();
@@ -319,17 +315,26 @@ export function buildGeometryMesh(geometry, state, cut) {
 
   if (geometry === 'slab') {
     const L = state.halfThickness;
-    // Show the slab as a plate wider than it is thick, which is what the
-    // "infinite slab" idealisation actually assumes. The WIDTH is pictorial
-    // and is capped to fit the vessel; the thickness is the physics and is not.
-    const halfSpan = Math.min(L * 3, MAX_PLATE_HALF_SPAN / s);
+    // Show the slab as a broad, flat plate, which is what the "infinite slab"
+    // idealisation actually assumes: the width is NOTIONALLY INFINITE, so it is
+    // drawn as wide as the vessel allows and does NOT track the thickness. The
+    // thickness (2L) is the physics and is the only dimension the slider moves.
+    //
+    // An earlier version tied the half-width to 3*L. That made the plate a
+    // fixed ~3:1 block at every setting -- a thin slab came out as a tiny chip
+    // and a thick one as a cube, so the picture never read as a slab and the
+    // thickness slider changed the whole size rather than just the thinness.
+    // Pinning the width makes a thin slab look like a wide sheet and a thick
+    // one like a thick plate, which is the distinction that matters.
+    const halfSpan = MAX_PLATE_HALF_SPAN / s;
     const span = halfSpan * 2;
     return {
-      mesh: slabMesh({ halfThickness: L, width: span, height: span, cutAngle }),
+      mesh: slabMesh({ halfThickness: L, width: span, depth: span, cutAngle }),
       scale: s,
-      // The plate's circumscribed radius in the horizontal plane.
+      // The plate lies flat: its horizontal footprint is the broad span, and
+      // its vertical half-height is the (small) half-thickness.
       outerRadius: halfSpan * Math.SQRT2 * s,
-      halfHeight: halfSpan * s,
+      halfHeight: L * s,
     };
   }
 

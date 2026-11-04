@@ -63,13 +63,28 @@ function boot() {
       b.className = 'tab';
       b.type = 'button';
       b.setAttribute('role', 'tab');
-      b.textContent = item.label;
-      b.addEventListener('click', () => store.set({ [key]: item.id }));
+      // A scenario still under development is shown but not selectable, so the
+      // demo cannot wander into an unfinished screen while the tab still
+      // advertises that the work exists. `available === false` gates it; any
+      // other value (including undefined) stays selectable.
+      const available = item.available !== false;
+      if (available) {
+        b.textContent = item.label;
+        b.addEventListener('click', () => store.set({ [key]: item.id }));
+      } else {
+        b.classList.add('tab-soon');
+        b.disabled = true;
+        b.setAttribute('aria-disabled', 'true');
+        b.title = 'In development — not available in this build yet';
+        b.innerHTML = `${item.label} <span class="tab-badge">in development</span>`;
+      }
       container.appendChild(b);
-      return { b, id: item.id };
+      return { b, id: item.id, available };
     });
     return (state) => {
-      for (const { b, id } of buttons) b.setAttribute('aria-selected', String(state[key] === id));
+      for (const { b, id, available } of buttons) {
+        b.setAttribute('aria-selected', String(available && state[key] === id));
+      }
     };
   }
 

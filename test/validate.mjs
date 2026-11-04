@@ -634,12 +634,12 @@ section('14. Geometry meshes sit centred in the vessel');
   // not tessellation round-off on a curved surface.
   check('worst off-centre offset over all shapes and cuts', worst, 1e-3, worstCase);
 
-  // The slab's field varies along x only and is mirror-symmetric about the
-  // mid-plane, because both faces are heated identically. The CUTAWAY must
-  // respect that: it may take material in y and z, where nothing varies, but
-  // never across x. A cut that crosses the mid-plane exposes x = 0 as one
-  // large uniformly-cold face and makes a slab heated on both faces look as
-  // though it is heated on one.
+  // The slab's field varies along y only (its thickness) and is
+  // mirror-symmetric about the mid-plane, because both faces are heated
+  // identically. The CUTAWAY must respect that: it may take material in x and
+  // z, where nothing varies, but never across y. A cut that crossed the
+  // mid-plane would expose y = 0 as one large uniformly-cold face and make a
+  // slab heated on both faces look as though it is heated on one.
   let asym = 0;
   for (const cut of [0, 0.25, 0.5, 0.75, 1]) {
     const p = buildGeometryMesh('slab', st, cut).mesh.positions;
@@ -647,10 +647,10 @@ section('14. Geometry meshes sit centred in the vessel');
     const set = new Set();
     for (let i = 0; i < p.length; i += 3) set.add(key(p[i], p[i + 1], p[i + 2]));
     for (let i = 0; i < p.length; i += 3) {
-      if (!set.has(key(-p[i], p[i + 1], p[i + 2]))) asym++;
+      if (!set.has(key(p[i], -p[i + 1], p[i + 2]))) asym++;
     }
   }
-  check('slab vertices without a mirror twin about x = 0', asym, 0);
+  check('slab vertices without a mirror twin about y = 0', asym, 0);
 
   // Both heated faces must carry the SAME field coordinate (the surface), or
   // the two sides of the slab would be drawn at different temperatures.
@@ -660,7 +660,7 @@ section('14. Geometry meshes sit centred in the vessel');
     let minU = Infinity;
     let maxU = -Infinity;
     for (let i = 0; i < p.length; i += 3) {
-      if (Math.abs(Math.abs(n[i]) - 1) > 1e-6) continue; // x-facing only
+      if (Math.abs(Math.abs(n[i + 1]) - 1) > 1e-6) continue; // y-facing (top/bottom) only
       const u = uvs[(i / 3) * 2];
       minU = Math.min(minU, u);
       maxU = Math.max(maxU, u);

@@ -27,11 +27,11 @@ export const CONTROL_SPEC = {
           type: 'segmented',
           label: 'Shape',
           options: [
-            { value: 'finiteCylinder', label: 'Can' },
             { value: 'cylinder', label: 'Cylinder' },
             { value: 'slab', label: 'Slab' },
             { value: 'sphere', label: 'Sphere' },
           ],
+          hint: 'The three classic idealised shapes. A real can is the cylinder with its ends ignored — radial conduction only.',
         },
         // Ranges cover every standard can and still fit inside the fixed
         // retort. A No. 10 can -- the largest in normal use -- is 157 mm in
@@ -41,12 +41,6 @@ export const CONTROL_SPEC = {
           min: 0.01, max: 0.09, step: 0.0005, scale: 'lin', display: 'mm', decimals: 1,
           visible: (s) => s.geometry !== 'slab',
           hint: 'A 307×409 can has R = 43.65 mm; a No. 10 can has R = 78 mm.',
-        },
-        {
-          key: 'canHeight', type: 'slider', label: 'Height', sym: 'H', unit: UNITS.mm,
-          min: 0.03, max: 0.25, step: 0.001, scale: 'lin', display: 'mm', decimals: 1,
-          visible: (s) => s.geometry === 'finiteCylinder',
-          hint: 'Full height. The solver uses half of it, by symmetry about mid-height.',
         },
         {
           key: 'halfThickness', type: 'slider', label: 'Half-thickness', sym: 'L', unit: UNITS.mm,
