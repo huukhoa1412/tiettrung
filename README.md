@@ -17,23 +17,29 @@ phone, and on any current browser.
 
 ## What it covers
 
-**Retort sterilisation.** Transient conduction in a slab, infinite cylinder,
-sphere, or a real finite can solved in two dimensions. Live Biot and Fourier
-numbers, lumped-capacitance validity, and an F₀ lethality curve at the cold spot.
-The can is shown **inside a vertical still retort** — on its rack, with the steam
-inlet and the vent — and the cutaway reveals the true interior field.
+**Retort sterilisation.** Transient conduction in the three classic idealised
+shapes — slab, cylinder (radial conduction, the textbook model of a can) and
+sphere. Live Biot and Fourier numbers, lumped-capacitance validity, and an F₀
+lethality curve at the cold spot. The product is shown **inside a vertical still
+retort** — on its rack, with the steam inlet and the vent — and the cutaway
+reveals the true interior field.
 
-**Chill and freeze.** The product sits **inside an air-blast chiller** — evaporator
-fan, wire shelf and airflow across the surface, which is what *h* physically is
-here. Freezing uses Plank's equation with an animated front; during the plateau
-the frozen shell carries its real quasi-steady profile (linear, logarithmic or
-1/r by geometry), derived from the same model that gives the freezing time.
-Pre-cooling and sub-cooling come from the full transient solver, and the seams
-between the two models are labelled on the plot.
+> **This build ships the retort scenario only.** Chill & freeze and the milk
+> line are still under development: their tabs appear but are disabled, and the
+> code and tests for them remain in the tree (nothing is deleted). The two
+> sections below describe where that work is headed.
 
-**Milk line (HTST).** Plate heat exchanger at 72 °C with a 15 s hold. LMTD and
-ε-NTU side by side, co-current versus counter-current, and a holding tube that
-checks the *fastest* particle rather than the average one.
+**Chill and freeze** *(in development).* The product sits **inside an air-blast
+chiller** — evaporator fan, wire shelf and airflow across the surface, which is
+what *h* physically is here. Freezing uses Plank's equation with an animated
+front; during the plateau the frozen shell carries its real quasi-steady profile
+(linear, logarithmic or 1/r by geometry), derived from the same model that gives
+the freezing time. Pre-cooling and sub-cooling come from the full transient
+solver, and the seams between the two models are labelled on the plot.
+
+**Milk line (HTST)** *(in development).* Plate heat exchanger at 72 °C with a
+15 s hold. LMTD and ε-NTU side by side, co-current versus counter-current, and a
+holding tube that checks the *fastest* particle rather than the average one.
 
 ### Connecting the maths to the sliders
 
