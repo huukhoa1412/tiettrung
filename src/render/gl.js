@@ -21,6 +21,9 @@
 
 /** Vertical field of view, radians. Shared by the projection and the framing. */
 const FOV_Y = 0.72;
+/** Opening view direction (radians about +y from +x): ~66 degrees, i.e. mostly
+ * from +z, onto the cross-section of the half-cut food. */
+const OPENING_AZIMUTH = 1.15;
 
 /* ---------------------------- 4x4 matrices ---------------------------- */
 function mat4Perspective(fovy, aspect, near, far) {
@@ -440,10 +443,12 @@ export class FieldRenderer {
     gl.disable(gl.CULL_FACE);
 
     // Camera state, in spherical coordinates about the origin.
-    // Opening azimuth points into the cutaway wedge (which is removed from
-    // theta = 0 outward), so the interior field is visible without the viewer
+    // The food is drawn cut in half with the cross-section on the plane
+    // z = 0, facing +z. The opening azimuth looks mostly along -z onto that
+    // face -- turned slightly off square so the curved outer surface still
+    // reads as 3-D -- so the interior field is visible without the viewer
     // having to discover that the object can be rotated.
-    this.camera = { azimuth: 0.45, elevation: 0.34, distance: 3.4 };
+    this.camera = { azimuth: OPENING_AZIMUTH, elevation: 0.34, distance: 3.4 };
     this.scale = 1;
     this.frameRadius = 1.15;
     this.minDistance = 1.4;
@@ -816,7 +821,7 @@ export class FieldRenderer {
   }
 
   resetView() {
-    this.camera = { azimuth: 0.45, elevation: 0.34, distance: this.defaultDistance ?? 3.4 };
+    this.camera = { azimuth: OPENING_AZIMUTH, elevation: 0.34, distance: this.defaultDistance ?? 3.4 };
     this.requestDraw();
   }
 }

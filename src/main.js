@@ -28,7 +28,7 @@ import { createReadout } from './ui/readout.js';
 import { createPlots } from './ui/plots.js';
 import { createStage } from './render/stage.js';
 import { MEDIA } from './render/medium.js';
-import { renderEquations, SCENARIO_EQUATIONS, highlightSymbol } from './ui/mathblocks.js';
+import { renderEquations, scenarioEquationIds, highlightSymbol } from './ui/mathblocks.js';
 import { clock } from './core/units.js';
 
 function boot() {
@@ -242,10 +242,12 @@ function boot() {
       const spec = MEDIA[state.heatingMedium];
       if (spec) store.set({ h: spec.h });
     }
-    if (changed.has('scenario')) {
-      renderEquations(el('equations'), SCENARIO_EQUATIONS[state.scenario]);
-      store.set({ frame: 0 });
+    // Several equations are written out per shape, so the list follows the
+    // geometry as well as the scenario.
+    if (changed.has('scenario') || changed.has('geometry')) {
+      renderEquations(el('equations'), scenarioEquationIds(state));
     }
+    if (changed.has('scenario')) store.set({ frame: 0 });
     scheduleSolve();
   });
 
@@ -285,7 +287,7 @@ function boot() {
   });
 
   /* -------------------------- start ------------------------- */
-  renderEquations(el('equations'), SCENARIO_EQUATIONS[store.get().scenario]);
+  renderEquations(el('equations'), scenarioEquationIds(store.get()));
   applyPreset(store.get().presetId, store);
   // Solve and paint synchronously on first load, so the interface is never
   // blank waiting on a frame that a background tab will not deliver.

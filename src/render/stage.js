@@ -12,7 +12,7 @@
 import { FieldRenderer } from './gl.js';
 import { Fallback2D } from './fallback2d.js';
 import { ExchangerView } from './exchanger2d.js';
-import { buildGeometryMesh } from './mesh.js';
+import { buildGeometryMesh, CUT_HALF } from './mesh.js';
 import { buildFieldImage, buildFreezeFieldImage, fieldRange } from './field.js';
 
 import { drawColorBar, COLORMAPS } from './colormap.js';
@@ -40,9 +40,6 @@ export function createStage(container, store) {
         <label class="stage-ctl stage-check">
           <input type="checkbox" id="equip-toggle" checked> Equipment
         </label>
-        <label class="stage-ctl">Cut
-          <input type="range" id="cut-slider" min="0" max="100" value="50" aria-label="Cutaway">
-        </label>
         <label class="stage-ctl">Colours
           <select id="cmap-select" aria-label="Colour map">
             ${COLORMAPS.map((c) => `<option value="${c.id}">${c.label}</option>`).join('')}
@@ -57,7 +54,6 @@ export function createStage(container, store) {
   const canvas2d = container.querySelector('#stage-canvas-2d');
   const colorbar = container.querySelector('#stage-colorbar');
   const caption = container.querySelector('#stage-caption');
-  const cutSlider = container.querySelector('#cut-slider');
   const cmapSelect = container.querySelector('#cmap-select');
 
   const gl = FieldRenderer.create(canvas);
@@ -170,12 +166,8 @@ export function createStage(container, store) {
 
 
   cmapSelect.value = store.get().colormap;
-  cutSlider.value = String(Math.round(store.get().cutaway * 100));
   equipToggle.checked = store.get().showEquipment;
 
-  cutSlider.addEventListener('input', () => {
-    store.set({ cutaway: Number(cutSlider.value) / 100 });
-  });
   equipToggle.addEventListener('change', () => {
     store.set({ showEquipment: equipToggle.checked });
   });
@@ -226,12 +218,11 @@ export function createStage(container, store) {
     // factors are not defined for a finite cylinder, so that case is solved as
     // an infinite one and must be drawn as one too.
     const geometry = result.geometry ?? state.geometry;
-    const key = [
-      geometry, state.radius, state.canHeight, state.halfThickness,
-      Math.round(state.cutaway * 100),
-    ].join(':');
+    // The food is always drawn cut in half (see CUT_HALF in mesh.js), so the
+    // cut is not part of the key.
+    const key = [geometry, state.radius, state.canHeight, state.halfThickness].join(':');
     if (key !== meshKey || force) {
-      const built = buildGeometryMesh(geometry, state, state.cutaway);
+      const built = buildGeometryMesh(geometry, state, CUT_HALF);
       if (gl) gl.setGeometry(built.mesh, built.scale);
       // The food's size IN SCENE UNITS, retained so the vessel and the steam
       // annulus are placed from the same numbers the food was drawn with
