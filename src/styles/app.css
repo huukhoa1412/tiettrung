@@ -580,7 +580,7 @@ select.control-select, .control-full {
 }
 .stage-ctl { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: var(--text-dim); font-weight: 600; }
 .stage-ctl input[type="range"] { width: 6.5rem; }
-.stage-check { cursor: pointer; user-select: none; }
+.stage-check { cursor: pointer; user-select: none; white-space: nowrap; }
 .stage-check input { width: 1rem; height: 1rem; accent-color: var(--accent); cursor: pointer; }
 .stage-ctl select { font-size: 0.8125rem; padding: 0.1rem 0.2rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
 .stage-controls button {

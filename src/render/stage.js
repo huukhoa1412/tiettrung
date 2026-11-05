@@ -40,6 +40,9 @@ export function createStage(container, store) {
         <label class="stage-ctl stage-check">
           <input type="checkbox" id="equip-toggle" checked> Equipment
         </label>
+        <label class="stage-ctl stage-check" title="Cut the food in half to see the temperature inside">
+          <input type="checkbox" id="cut-toggle" checked> Cut view
+        </label>
         <label class="stage-ctl">Colours
           <select id="cmap-select" aria-label="Colour map">
             ${COLORMAPS.map((c) => `<option value="${c.id}">${c.label}</option>`).join('')}
@@ -167,9 +170,14 @@ export function createStage(container, store) {
 
   cmapSelect.value = store.get().colormap;
   equipToggle.checked = store.get().showEquipment;
+  const cutToggle = container.querySelector('#cut-toggle');
+  cutToggle.checked = store.get().cutView;
 
   equipToggle.addEventListener('change', () => {
     store.set({ showEquipment: equipToggle.checked });
+  });
+  cutToggle.addEventListener('change', () => {
+    store.set({ cutView: cutToggle.checked });
   });
   cmapSelect.addEventListener('change', () => {
     store.set({ colormap: cmapSelect.value });
@@ -218,11 +226,13 @@ export function createStage(container, store) {
     // factors are not defined for a finite cylinder, so that case is solved as
     // an infinite one and must be drawn as one too.
     const geometry = result.geometry ?? state.geometry;
-    // The food is always drawn cut in half (see CUT_HALF in mesh.js), so the
-    // cut is not part of the key.
-    const key = [geometry, state.radius, state.canHeight, state.halfThickness].join(':');
+    // "Cut view" shows the food cut exactly in half through its centre (see
+    // CUT_HALF in mesh.js); unticked, the whole shape is drawn, whose surface
+    // is all one temperature at any instant.
+    const cut = state.cutView === false ? 0 : CUT_HALF;
+    const key = [geometry, state.radius, state.canHeight, state.halfThickness, cut].join(':');
     if (key !== meshKey || force) {
-      const built = buildGeometryMesh(geometry, state, CUT_HALF);
+      const built = buildGeometryMesh(geometry, state, cut);
       if (gl) gl.setGeometry(built.mesh, built.scale);
       // The food's size IN SCENE UNITS, retained so the vessel and the steam
       // annulus are placed from the same numbers the food was drawn with

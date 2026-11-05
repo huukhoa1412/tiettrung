@@ -146,6 +146,7 @@ export function defaultState() {
     colormap: 'rainbow',
     showEquations: true,
     showEquipment: true,
+    cutView: true, // draw the food cut in half so the inside is visible
   };
 }
 
