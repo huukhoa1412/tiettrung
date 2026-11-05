@@ -145,7 +145,6 @@ export function defaultState() {
     theme: 'auto',
     colormap: 'rainbow',
     showEquations: true,
-    cutaway: 0.5,
     showEquipment: true,
   };
 }

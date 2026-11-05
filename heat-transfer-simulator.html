@@ -1002,7 +1002,6 @@ function defaultState() {
     theme: 'auto',
     colormap: 'rainbow',
     showEquations: true,
-    cutaway: 0.5,
     showEquipment: true,
   };
 }
@@ -3729,12 +3728,225 @@ const EQUATIONS = {
   },
 };
 
-/** Which equations belong to which scenario, in teaching order. */
+/* ------------------------------------------------------------------ */
+/**
+ * SHAPE-SPECIFIC EQUATIONS.
+ *
+ * Five retort equations change with the geometry: the conduction equation
+ * itself, the Biot and Fourier numbers (through the characteristic length),
+ * the exact series solution (through its eigenfunction, eigenvalue condition
+ * and coefficients) and the lumped solution (through A/V). Each is written out
+ * for the shape on screen, so picking a shape visibly changes the maths and no
+ * student has to substitute m = 0, 1, 2 into a general form in their head.
+ *
+ * Generated from one table so the three shapes cannot drift apart, and kept
+ * IDENTICAL to what the solver computes: the eigenfunctions, eigenvalue
+ * conditions and C_n below are those in physics/analytical.js (Incropera &
+ * DeWitt ch. 5), with Bi and Fo on the same characteristic length the result
+ * tiles report -- the half-thickness L for a slab, the radius R otherwise.
+ */
+const zn = '<msub><mi>ζ</mi><mi>n</mi></msub>';
+const zn2 = '<msubsup><mi>ζ</mi><mi>n</mi><mn>2</mn></msubsup>';
+const Cn = '<msub><mi>C</mi><mi>n</mi></msub>';
+const J = (order, power) =>
+  power ? `<msubsup><mi>J</mi><mn>${order}</mn><mn>${power}</mn></msubsup>` : `<msub><mi>J</mi><mn>${order}</mn></msub>`;
+const of = (...args) => row(O('('), ...args, O(')'));
+const dTdt = frac(row(O('∂'), I('T')), row(O('∂'), I('t')));
+const theta = I('θ');
+
+const SHAPES = {
+  slab: {
+    noun: 'slab',
+    key: 'halfThickness',
+    Lc: 'L',
+    coord: 'x',
+    conduction: (x) =>
+      row(dTdt, O('='), D('alpha', 'α'), frac(row(`<msup>${O('∂')}${N('2')}</msup>`, I('T')), row(O('∂'), `<msup>${x}${N('2')}</msup>`))),
+    conductionNote:
+      'Heat flows straight through the thickness, so there is no geometric factor. x runs from the mid-plane — ' +
+      'the cold spot — out to the half-thickness L at either heated face.',
+    eigenfunction: row(I('cos'), of(zn, I('η'))),
+    eigenvalue: row(zn, I('tan'), zn, O('='), D('Bi', 'Bi')),
+    coefficient: frac(row(N('4'), I('sin'), zn), row(N('2'), zn, O('+'), I('sin'), of(N('2'), zn))),
+    lumpedFactor: '',
+    volumeOverArea: 'L',
+    sizeNote: 'doubling the thickness quadruples the time to reach the same Fo',
+    lcNote: 'L is the HALF-thickness: the slab is heated from both faces, so heat only has to travel half way.',
+  },
+  cylinder: {
+    noun: 'cylinder',
+    key: 'radius',
+    Lc: 'R',
+    coord: 'r',
+    conduction: (r) =>
+      row(dTdt, O('='), D('alpha', 'α'), frac(N('1'), r), frac(O('∂'), row(O('∂'), r)), O('('), r, frac(row(O('∂'), I('T')), row(O('∂'), r)), O(')')),
+    conductionNote:
+      'Radial conduction only; the ends are ignored, which is the textbook model of a can. The factor r appears ' +
+      'because each shell has more area than the one inside it, so heat converges as it moves in to the axis.',
+    eigenfunction: row(J(0), of(zn, I('η'))),
+    eigenvalue: row(frac(row(zn, J(1), of(zn)), row(J(0), of(zn))), O('='), D('Bi', 'Bi')),
+    coefficient: row(
+      frac(N('2'), zn),
+      frac(row(J(1), of(zn)), row(J(0, 2), of(zn), O('+'), J(1, 2), of(zn))),
+    ),
+    lumpedFactor: '2',
+    volumeOverArea: 'R/2',
+    sizeNote: 'doubling the can radius quadruples the time to reach the same Fo',
+    lcNote: 'R is the radius. The Biot on V/A tile uses V/A = R/2 instead; that one decides the lumped verdict.',
+  },
+  sphere: {
+    noun: 'sphere',
+    key: 'radius',
+    Lc: 'R',
+    coord: 'r',
+    conduction: (r) => {
+      const r2 = `<msup>${r}${N('2')}</msup>`;
+      return row(dTdt, O('='), D('alpha', 'α'), frac(N('1'), r2), frac(O('∂'), row(O('∂'), r)), O('('), r2, frac(row(O('∂'), I('T')), row(O('∂'), r)), O(')'));
+    },
+    conductionNote:
+      'Heat enters from every direction: shell area grows as r², so the sphere has the most surface per unit ' +
+      'volume and heats fastest of the three shapes for the same characteristic length.',
+    eigenfunction: frac(row(I('sin'), of(zn, I('η'))), row(zn, I('η'))),
+    eigenvalue: row(N('1'), O('−'), zn, I('cot'), zn, O('='), D('Bi', 'Bi')),
+    coefficient: frac(
+      row(N('4'), O('['), I('sin'), zn, O('−'), zn, I('cos'), zn, O(']')),
+      row(N('2'), zn, O('−'), I('sin'), of(N('2'), zn)),
+    ),
+    lumpedFactor: '3',
+    volumeOverArea: 'R/3',
+    sizeNote: 'doubling the radius quadruples the time to reach the same Fo',
+    lcNote: 'R is the radius. The Biot on V/A tile uses V/A = R/3 instead; that one decides the lumped verdict.',
+  },
+};
+
+for (const [g, sh] of Object.entries(SHAPES)) {
+  const Lc = S(sh.key, sh.Lc);
+  const coord = S(sh.key, sh.coord);
+  const shapeName = sh.noun;
+
+  EQUATIONS[`conduction_${g}`] = {
+    title: `Transient conduction — ${shapeName}`,
+    params: ['k', 'rho', 'cp', 'alpha', sh.key],
+    mathml: block(sh.conduction(coord)),
+    note: sh.conductionNote,
+  };
+
+  EQUATIONS[`biot_${g}`] = {
+    title: 'Biot number — which resistance is in charge',
+    params: ['h', 'k', sh.key, 'Bi'],
+    mathml: block(
+      row(
+        D('Bi', 'Bi'),
+        O('='),
+        frac(row(S('h', 'h'), Lc), S('k', 'k')),
+        O('='),
+        frac(row(Lc, O('/'), S('k', 'k')), row(N('1'), O('/'), S('h', 'h'))),
+      ),
+    ),
+    note:
+      `${sh.lcNote} Bi is internal conduction resistance over surface film resistance. Bi ≪ 1: the film ` +
+      'controls and the food is nearly isothermal inside. Bi ≫ 1: conduction controls and the centre lags badly.',
+  };
+
+  EQUATIONS[`fourier_${g}`] = {
+    title: 'Fourier number Fo — dimensionless TIME',
+    params: ['processTime', sh.key, 'alpha', 'Fo'],
+    mathml: block(
+      row(D('Fo', 'Fo'), O('='), frac(row(D('alpha', 'α'), S('processTime', 't')), `<msup>${Lc}${N('2')}</msup>`)),
+    ),
+    note:
+      `How far heat has diffused compared with how far it must go. Note the SQUARE: ${sh.sizeNote}. ` +
+      'This one fact explains most of thermal process design.\n\n' +
+      'Do not confuse Fo with F₀. Fo (roman “o”) is the Fourier number, a dimensionless time. F₀ (subscript zero) ' +
+      'is the accumulated lethality in equivalent minutes.',
+  };
+
+  EQUATIONS[`series_${g}`] = {
+    title: `Exact solution — ${shapeName}`,
+    params: ['Bi', 'Fo', 'Tinitial', 'Tmedium', sh.key],
+    mathml:
+      block(
+        row(
+          theta,
+          O('='),
+          frac(row(I('T'), O('−'), Ssub('Tmedium', 'T', '∞')), row(Ssub('Tinitial', 'T', 'i'), O('−'), Ssub('Tmedium', 'T', '∞'))),
+          O(','),
+          `<mspace width="0.8em"/>`,
+          I('η'),
+          O('='),
+          frac(coord, Lc),
+        ),
+      ) +
+      block(
+        row(
+          theta,
+          O('='),
+          `<munderover><mo>∑</mo><mrow><mi>n</mi><mo>=</mo><mn>1</mn></mrow><mi>∞</mi></munderover>`,
+          Cn,
+          `<msup><mi>e</mi><mrow><mo>−</mo>${zn2}${D('Fo', 'Fo')}</mrow></msup>`,
+          sh.eigenfunction,
+        ),
+      ) +
+      // Eigenvalue condition and coefficient on separate lines: together they
+      // are too wide for the equation column.
+      block(sh.eigenvalue) +
+      block(row(Cn, O('='), sh.coefficient)),
+    note:
+      'Separation of variables. The eigenvalues ζₙ come from the second equation and depend on Bi alone. Higher ' +
+      'terms decay fast, so after Fo ≈ 0.2 only n = 1 survives — the one-term approximation behind the Heisler ' +
+      'charts. At the centre η = 0 the eigenfunction is 1.',
+  };
+
+  const factor = sh.lumpedFactor ? `${N(sh.lumpedFactor)}<mo>⁢</mo>` : '';
+  EQUATIONS[`lumped_${g}`] = {
+    title: 'Lumped capacitance (only when Bi on V/A < 0.1)',
+    params: ['h', 'rho', 'cp', 'processTime', 'Bi', 'Fo'],
+    mathml: block(
+      row(
+        theta,
+        O('='),
+        `<msup><mi>e</mi><mrow><mo>−</mo>${frac(
+          row(S('h', 'h'), I('A'), S('processTime', 't')),
+          row(S('rho', 'ρ'), I('V'), Ssub('cp', 'c', 'p')),
+        )}</mrow></msup>`,
+        O('='),
+        `<msup><mi>e</mi><mrow><mo>−</mo>${factor}${D('Bi', 'Bi')}<mo>⋅</mo>${D('Fo', 'Fo')}</mrow></msup>`,
+      ),
+    ),
+    note:
+      `For a ${shapeName}, V/A = ${sh.volumeOverArea}. With Bi and Fo on ${sh.Lc} as above, the exponent ` +
+      `hAt/(ρVc_p) works out to ${sh.lumpedFactor ? `${sh.lumpedFactor}·` : ''}Bi·Fo. If there is no ` +
+      'meaningful gradient inside, the whole object follows one exponential — check the Biot on V/A tile first.',
+  };
+}
+
+/** Resolve a shape-specific equation id, falling back to the general form. */
+const forShape = (base, fallback) => (state) =>
+  (EQUATIONS[`${base}_${state.geometry}`] ? `${base}_${state.geometry}` : fallback);
+
+/**
+ * Which equations belong to which scenario, in teaching order. An entry may be
+ * a function of state, for equations that change with the selected shape.
+ */
 const SCENARIO_EQUATIONS = {
-  retort: ['diffusivity', 'conduction1D', 'boundary', 'biot', 'fourier', 'series', 'lumped', 'lethality'],
-  chill: ['diffusivity', 'boundary', 'biot', 'plank'],
+  retort: [
+    'diffusivity',
+    forShape('conduction', 'conduction1D'),
+    'boundary',
+    forShape('biot', 'biot'),
+    forShape('fourier', 'fourier'),
+    forShape('series', 'series'),
+    forShape('lumped', 'lumped'),
+    'lethality',
+  ],
+  chill: ['diffusivity', 'boundary', forShape('biot', 'biot'), 'plank'],
   milk: ['lmtd', 'epsNtu', 'epsParallel'],
 };
+
+/** The equation ids to show for the current state. */
+function scenarioEquationIds(state) {
+  return (SCENARIO_EQUATIONS[state.scenario] ?? []).map((e) => (typeof e === 'function' ? e(state) : e));
+}
 
 /**
  * The single equation shown INLINE beside each control group, so the maths sits
@@ -3751,7 +3963,8 @@ const SCENARIO_EQUATIONS = {
  * reads as "F₀ =", the lethality symbol, which has nothing to do with either.
  */
 const GROUP_EQUATION = {
-  Geometry: () => 'conduction1D',
+  // Follows the selected shape, so switching shape visibly changes the maths.
+  Geometry: forShape('conduction', 'conduction1D'),
   'Food properties': 'diffusivity',
   'Retort process': 'boundary',
   'Lethality basis': 'lethality',
@@ -3836,13 +4049,14 @@ function taggedKeys() {
 
 __exports.EQUATIONS = undefined;
 __exports.SCENARIO_EQUATIONS = undefined;
+__exports.scenarioEquationIds = undefined;
 __exports.GROUP_EQUATION = undefined;
 __exports.groupEquationId = undefined;
 __exports.renderEquation = undefined;
 __exports.renderEquations = undefined;
 __exports.highlightSymbol = undefined;
 __exports.taggedKeys = undefined;
-Object.assign(__exports, { EQUATIONS, SCENARIO_EQUATIONS, GROUP_EQUATION, groupEquationId, renderEquation, renderEquations, highlightSymbol, taggedKeys });
+Object.assign(__exports, { EQUATIONS, SCENARIO_EQUATIONS, scenarioEquationIds, GROUP_EQUATION, groupEquationId, renderEquation, renderEquations, highlightSymbol, taggedKeys });
 
 };
 __registry["ui/panel.js"] = function (__exports, __req) {
@@ -6238,6 +6452,9 @@ __registry["render/gl.js"] = function (__exports, __req) {
 
 /** Vertical field of view, radians. Shared by the projection and the framing. */
 const FOV_Y = 0.72;
+/** Opening view direction (radians about +y from +x): ~66 degrees, i.e. mostly
+ * from +z, onto the cross-section of the half-cut food. */
+const OPENING_AZIMUTH = 1.15;
 
 /* ---------------------------- 4x4 matrices ---------------------------- */
 function mat4Perspective(fovy, aspect, near, far) {
@@ -6657,10 +6874,12 @@ class FieldRenderer {
     gl.disable(gl.CULL_FACE);
 
     // Camera state, in spherical coordinates about the origin.
-    // Opening azimuth points into the cutaway wedge (which is removed from
-    // theta = 0 outward), so the interior field is visible without the viewer
+    // The food is drawn cut in half with the cross-section on the plane
+    // z = 0, facing +z. The opening azimuth looks mostly along -z onto that
+    // face -- turned slightly off square so the curved outer surface still
+    // reads as 3-D -- so the interior field is visible without the viewer
     // having to discover that the object can be rotated.
-    this.camera = { azimuth: 0.45, elevation: 0.34, distance: 3.4 };
+    this.camera = { azimuth: OPENING_AZIMUTH, elevation: 0.34, distance: 3.4 };
     this.scale = 1;
     this.frameRadius = 1.15;
     this.minDistance = 1.4;
@@ -7033,7 +7252,7 @@ class FieldRenderer {
   }
 
   resetView() {
-    this.camera = { azimuth: 0.45, elevation: 0.34, distance: this.defaultDistance ?? 3.4 };
+    this.camera = { azimuth: OPENING_AZIMUTH, elevation: 0.34, distance: this.defaultDistance ?? 3.4 };
     this.requestDraw();
   }
 }
@@ -8072,24 +8291,19 @@ function slabMesh({ halfThickness: L, width, depth, cutAngle, nDiv = 48 }) {
   const hw = width / 2; // half-extent along x (a broad horizontal dimension)
   const hd = depth / 2; // half-extent along z (the other broad dimension)
 
-  // WHERE THE CUTAWAY IS ALLOWED TO CUT.
+  // WHERE THE CUT GOES.
   //
-  // A cylinder's wedge is removed in THETA -- a direction along which the
-  // temperature does not vary. That is why it looks right: the cut never
-  // crosses a plane the physics cares about, and every exposed face still
-  // shows a complete radial profile.
+  // Every shape is cut the same way: the half nearest the viewer (z > 0) is
+  // removed, leaving a cross-section on the plane z = 0 through the centre.
+  // For the slab that plane runs the full thickness, so the exposed face
+  // shows the complete hot-cold-hot profile across the whole width -- the
+  // entire lesson of the slab problem on one big face. The cut is parallel
+  // to the thickness (y), so mirror symmetry about the mid-plane y = 0 is
+  // untouched: both heated faces stay identical.
   //
-  // The slab's field varies along y ONLY (the thickness), and it is
-  // mirror-symmetric about the mid-plane y = 0 because both faces are heated
-  // identically. So the cut must stay out of y entirely and take material in
-  // x and z, where nothing varies. Removing the horizontal corner x > 0,
-  // z > zc keeps the body centred, keeps mirror symmetry about y = 0 exact,
-  // and leaves BOTH exposed cut faces running the full thickness, so each
-  // shows the complete hot-cold-hot profile that is the whole point of the
-  // slab problem.
-  const frac = Math.min(0.5, cutAngle / Math.PI);
-  const zc = hd - 2 * hd * frac;
-  const notched = hd - zc > 1e-9;
+  // cutAngle runs 0 (whole) to pi (half removed), matching the cylinder and
+  // sphere, where it is the angle of the wedge taken out about the axis.
+  const zc = hd * (1 - Math.min(1, cutAngle / Math.PI));
 
   const u = (y) => Math.min(1, Math.abs(y) / L);
 
@@ -8117,34 +8331,25 @@ function slabMesh({ halfThickness: L, width, depth, cutAngle, nDiv = 48 }) {
 
   const lerp = (a, c, t) => a + (c - a) * t;
 
+  // The remaining body is the box x in [-hw, hw], y in [-L, L], z in [-hd, zc].
+
   // --- the two heated faces, y = -L (bottom) and y = +L (top) ---
-  // u is constant (1) on each, so no subdivision is needed. Each is L-shaped
-  // once the notch bites, so it is emitted as the full part plus the tongue at
-  // x < 0. Both faces are built identically, which is what guarantees the
-  // mirror symmetry the physics has.
+  // u is constant (1) on each, so no subdivision is needed. Both are built
+  // identically, which is what guarantees the mirror symmetry the physics has.
   for (const [y, n] of [[-L, [0, -1, 0]], [L, [0, 1, 0]]]) {
     face(1, 1, (s, t) => [lerp(-hw, hw, s), y, lerp(-hd, zc, t)], n);
-    if (notched) face(1, 1, (s, t) => [lerp(-hw, 0, s), y, lerp(zc, hd, t)], n);
   }
 
   // --- far edge, z = -hd: spans the thickness, so subdivide in y ---
   face(nDiv, 1, (s, t) => [lerp(-hw, hw, t), lerp(-L, L, s), -hd], [0, 0, -1]);
 
-  // --- near edge, z = +hd: only the x < 0 half survives the notch ---
-  face(nDiv, 1, (s, t) => [lerp(-hw, notched ? 0 : hw, t), lerp(-L, L, s), hd], [0, 0, 1]);
+  // --- near face, z = zc: the cross-section when cut, the outer edge when
+  // whole. Full width and full thickness, so it shows the whole profile. ---
+  face(nDiv, 1, (s, t) => [lerp(-hw, hw, t), lerp(-L, L, s), zc], [0, 0, 1]);
 
-  // --- left edge, x = -hw: untouched by the notch ---
-  face(nDiv, 1, (s, t) => [-hw, lerp(-L, L, s), lerp(-hd, hd, t)], [-1, 0, 0]);
-
-  // --- right edge, x = +hw: only up to the notch (z < zc) ---
+  // --- side edges, x = -hw and x = +hw ---
+  face(nDiv, 1, (s, t) => [-hw, lerp(-L, L, s), lerp(-hd, zc, t)], [-1, 0, 0]);
   face(nDiv, 1, (s, t) => [hw, lerp(-L, L, s), lerp(-hd, zc, t)], [1, 0, 0]);
-
-  if (notched) {
-    // Both cut faces run the FULL thickness, so each shows the complete
-    // hot-cold-hot profile rather than a single-temperature plane.
-    face(nDiv, 1, (s, t) => [lerp(0, hw, t), lerp(-L, L, s), zc], [0, 0, 1]);
-    face(nDiv, 1, (s, t) => [0, lerp(-L, L, s), lerp(zc, hd, t)], [1, 0, 0]);
-  }
 
   return b.finish();
 }
@@ -8191,6 +8396,9 @@ const SCENE_PER_METRE = 16;
 const MAX_PLATE_HALF_SPAN = 1.1; // circumscribed radius 1.1*sqrt(2) = 1.56 < bore
 const MAX_HALF_LENGTH = 2.0;
 
+/** The cut the app always uses: half the food removed. */
+const CUT_HALF = 1;
+
 /**
  * Build the mesh for the current geometry.
  *
@@ -8198,10 +8406,15 @@ const MAX_HALF_LENGTH = 2.0;
  * half-height IN SCENE UNITS, so the vessel and the heating medium can be
  * placed around it without independently re-deriving its size.
  *
- * @param cut  0 = whole object, 1 = a quarter removed (a 90 degree wedge)
+ * The app always draws the food CUT IN HALF (cut = 1): the half facing the
+ * viewer (z > 0) is removed so the full cross-section through the centre is
+ * on show. There is deliberately no slider for it -- a cross-section is the
+ * view that teaches, and an adjustable wedge only invited fiddling.
+ *
+ * @param cut  0 = whole object, 1 = half removed (cross-section on z = 0)
  */
-function buildGeometryMesh(geometry, state, cut) {
-  const cutAngle = Math.max(0, Math.min(1, cut)) * (Math.PI / 2);
+function buildGeometryMesh(geometry, state, cut = CUT_HALF) {
+  const cutAngle = Math.max(0, Math.min(1, cut)) * Math.PI;
   const s = SCENE_PER_METRE;
 
   if (geometry === 'slab') {
@@ -8254,8 +8467,9 @@ function buildGeometryMesh(geometry, state, cut) {
 }
 
 __exports.SCENE_PER_METRE = undefined;
+__exports.CUT_HALF = undefined;
 __exports.buildGeometryMesh = undefined;
-Object.assign(__exports, { SCENE_PER_METRE, buildGeometryMesh });
+Object.assign(__exports, { SCENE_PER_METRE, CUT_HALF, buildGeometryMesh });
 
 };
 __registry["render/equipment.js"] = function (__exports, __req) {
@@ -8930,7 +9144,7 @@ __registry["render/stage.js"] = function (__exports, __req) {
 const { FieldRenderer } = __req("render/gl.js");
 const { Fallback2D } = __req("render/fallback2d.js");
 const { ExchangerView } = __req("render/exchanger2d.js");
-const { buildGeometryMesh } = __req("render/mesh.js");
+const { buildGeometryMesh, CUT_HALF } = __req("render/mesh.js");
 const { buildFieldImage, buildFreezeFieldImage, fieldRange } = __req("render/field.js");
 
 const { drawColorBar, COLORMAPS } = __req("render/colormap.js");
@@ -8956,9 +9170,6 @@ function createStage(container, store) {
         <label class="stage-ctl stage-check">
           <input type="checkbox" id="equip-toggle" checked> Equipment
         </label>
-        <label class="stage-ctl">Cut
-          <input type="range" id="cut-slider" min="0" max="100" value="50" aria-label="Cutaway">
-        </label>
         <label class="stage-ctl">Colours
           <select id="cmap-select" aria-label="Colour map">
             ${COLORMAPS.map((c) => `<option value="${c.id}">${c.label}</option>`).join('')}
@@ -8973,7 +9184,6 @@ function createStage(container, store) {
   const canvas2d = container.querySelector('#stage-canvas-2d');
   const colorbar = container.querySelector('#stage-colorbar');
   const caption = container.querySelector('#stage-caption');
-  const cutSlider = container.querySelector('#cut-slider');
   const cmapSelect = container.querySelector('#cmap-select');
 
   const gl = FieldRenderer.create(canvas);
@@ -9086,12 +9296,8 @@ function createStage(container, store) {
 
 
   cmapSelect.value = store.get().colormap;
-  cutSlider.value = String(Math.round(store.get().cutaway * 100));
   equipToggle.checked = store.get().showEquipment;
 
-  cutSlider.addEventListener('input', () => {
-    store.set({ cutaway: Number(cutSlider.value) / 100 });
-  });
   equipToggle.addEventListener('change', () => {
     store.set({ showEquipment: equipToggle.checked });
   });
@@ -9142,12 +9348,11 @@ function createStage(container, store) {
     // factors are not defined for a finite cylinder, so that case is solved as
     // an infinite one and must be drawn as one too.
     const geometry = result.geometry ?? state.geometry;
-    const key = [
-      geometry, state.radius, state.canHeight, state.halfThickness,
-      Math.round(state.cutaway * 100),
-    ].join(':');
+    // The food is always drawn cut in half (see CUT_HALF in mesh.js), so the
+    // cut is not part of the key.
+    const key = [geometry, state.radius, state.canHeight, state.halfThickness].join(':');
     if (key !== meshKey || force) {
-      const built = buildGeometryMesh(geometry, state, state.cutaway);
+      const built = buildGeometryMesh(geometry, state, CUT_HALF);
       if (gl) gl.setGeometry(built.mesh, built.scale);
       // The food's size IN SCENE UNITS, retained so the vessel and the steam
       // annulus are placed from the same numbers the food was drawn with
@@ -9360,7 +9565,7 @@ const { createReadout } = __req("ui/readout.js");
 const { createPlots } = __req("ui/plots.js");
 const { createStage } = __req("render/stage.js");
 const { MEDIA } = __req("render/medium.js");
-const { renderEquations, SCENARIO_EQUATIONS, highlightSymbol } = __req("ui/mathblocks.js");
+const { renderEquations, scenarioEquationIds, highlightSymbol } = __req("ui/mathblocks.js");
 const { clock } = __req("core/units.js");
 
 function boot() {
@@ -9574,10 +9779,12 @@ function boot() {
       const spec = MEDIA[state.heatingMedium];
       if (spec) store.set({ h: spec.h });
     }
-    if (changed.has('scenario')) {
-      renderEquations(el('equations'), SCENARIO_EQUATIONS[state.scenario]);
-      store.set({ frame: 0 });
+    // Several equations are written out per shape, so the list follows the
+    // geometry as well as the scenario.
+    if (changed.has('scenario') || changed.has('geometry')) {
+      renderEquations(el('equations'), scenarioEquationIds(state));
     }
+    if (changed.has('scenario')) store.set({ frame: 0 });
     scheduleSolve();
   });
 
@@ -9617,7 +9824,7 @@ function boot() {
   });
 
   /* -------------------------- start ------------------------- */
-  renderEquations(el('equations'), SCENARIO_EQUATIONS[store.get().scenario]);
+  renderEquations(el('equations'), scenarioEquationIds(store.get()));
   applyPreset(store.get().presetId, store);
   // Solve and paint synchronously on first load, so the interface is never
   // blank waiting on a frame that a background tab will not deliver.

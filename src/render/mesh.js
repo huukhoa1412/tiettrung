@@ -181,24 +181,19 @@ function slabMesh({ halfThickness: L, width, depth, cutAngle, nDiv = 48 }) {
   const hw = width / 2; // half-extent along x (a broad horizontal dimension)
   const hd = depth / 2; // half-extent along z (the other broad dimension)
 
-  // WHERE THE CUTAWAY IS ALLOWED TO CUT.
+  // WHERE THE CUT GOES.
   //
-  // A cylinder's wedge is removed in THETA -- a direction along which the
-  // temperature does not vary. That is why it looks right: the cut never
-  // crosses a plane the physics cares about, and every exposed face still
-  // shows a complete radial profile.
+  // Every shape is cut the same way: the half nearest the viewer (z > 0) is
+  // removed, leaving a cross-section on the plane z = 0 through the centre.
+  // For the slab that plane runs the full thickness, so the exposed face
+  // shows the complete hot-cold-hot profile across the whole width -- the
+  // entire lesson of the slab problem on one big face. The cut is parallel
+  // to the thickness (y), so mirror symmetry about the mid-plane y = 0 is
+  // untouched: both heated faces stay identical.
   //
-  // The slab's field varies along y ONLY (the thickness), and it is
-  // mirror-symmetric about the mid-plane y = 0 because both faces are heated
-  // identically. So the cut must stay out of y entirely and take material in
-  // x and z, where nothing varies. Removing the horizontal corner x > 0,
-  // z > zc keeps the body centred, keeps mirror symmetry about y = 0 exact,
-  // and leaves BOTH exposed cut faces running the full thickness, so each
-  // shows the complete hot-cold-hot profile that is the whole point of the
-  // slab problem.
-  const frac = Math.min(0.5, cutAngle / Math.PI);
-  const zc = hd - 2 * hd * frac;
-  const notched = hd - zc > 1e-9;
+  // cutAngle runs 0 (whole) to pi (half removed), matching the cylinder and
+  // sphere, where it is the angle of the wedge taken out about the axis.
+  const zc = hd * (1 - Math.min(1, cutAngle / Math.PI));
 
   const u = (y) => Math.min(1, Math.abs(y) / L);
 
@@ -226,34 +221,25 @@ function slabMesh({ halfThickness: L, width, depth, cutAngle, nDiv = 48 }) {
 
   const lerp = (a, c, t) => a + (c - a) * t;
 
+  // The remaining body is the box x in [-hw, hw], y in [-L, L], z in [-hd, zc].
+
   // --- the two heated faces, y = -L (bottom) and y = +L (top) ---
-  // u is constant (1) on each, so no subdivision is needed. Each is L-shaped
-  // once the notch bites, so it is emitted as the full part plus the tongue at
-  // x < 0. Both faces are built identically, which is what guarantees the
-  // mirror symmetry the physics has.
+  // u is constant (1) on each, so no subdivision is needed. Both are built
+  // identically, which is what guarantees the mirror symmetry the physics has.
   for (const [y, n] of [[-L, [0, -1, 0]], [L, [0, 1, 0]]]) {
     face(1, 1, (s, t) => [lerp(-hw, hw, s), y, lerp(-hd, zc, t)], n);
-    if (notched) face(1, 1, (s, t) => [lerp(-hw, 0, s), y, lerp(zc, hd, t)], n);
   }
 
   // --- far edge, z = -hd: spans the thickness, so subdivide in y ---
   face(nDiv, 1, (s, t) => [lerp(-hw, hw, t), lerp(-L, L, s), -hd], [0, 0, -1]);
 
-  // --- near edge, z = +hd: only the x < 0 half survives the notch ---
-  face(nDiv, 1, (s, t) => [lerp(-hw, notched ? 0 : hw, t), lerp(-L, L, s), hd], [0, 0, 1]);
+  // --- near face, z = zc: the cross-section when cut, the outer edge when
+  // whole. Full width and full thickness, so it shows the whole profile. ---
+  face(nDiv, 1, (s, t) => [lerp(-hw, hw, t), lerp(-L, L, s), zc], [0, 0, 1]);
 
-  // --- left edge, x = -hw: untouched by the notch ---
-  face(nDiv, 1, (s, t) => [-hw, lerp(-L, L, s), lerp(-hd, hd, t)], [-1, 0, 0]);
-
-  // --- right edge, x = +hw: only up to the notch (z < zc) ---
+  // --- side edges, x = -hw and x = +hw ---
+  face(nDiv, 1, (s, t) => [-hw, lerp(-L, L, s), lerp(-hd, zc, t)], [-1, 0, 0]);
   face(nDiv, 1, (s, t) => [hw, lerp(-L, L, s), lerp(-hd, zc, t)], [1, 0, 0]);
-
-  if (notched) {
-    // Both cut faces run the FULL thickness, so each shows the complete
-    // hot-cold-hot profile rather than a single-temperature plane.
-    face(nDiv, 1, (s, t) => [lerp(0, hw, t), lerp(-L, L, s), zc], [0, 0, 1]);
-    face(nDiv, 1, (s, t) => [0, lerp(-L, L, s), lerp(zc, hd, t)], [1, 0, 0]);
-  }
 
   return b.finish();
 }
@@ -300,6 +286,9 @@ export const SCENE_PER_METRE = 16;
 const MAX_PLATE_HALF_SPAN = 1.1; // circumscribed radius 1.1*sqrt(2) = 1.56 < bore
 const MAX_HALF_LENGTH = 2.0;
 
+/** The cut the app always uses: half the food removed. */
+export const CUT_HALF = 1;
+
 /**
  * Build the mesh for the current geometry.
  *
@@ -307,10 +296,15 @@ const MAX_HALF_LENGTH = 2.0;
  * half-height IN SCENE UNITS, so the vessel and the heating medium can be
  * placed around it without independently re-deriving its size.
  *
- * @param cut  0 = whole object, 1 = a quarter removed (a 90 degree wedge)
+ * The app always draws the food CUT IN HALF (cut = 1): the half facing the
+ * viewer (z > 0) is removed so the full cross-section through the centre is
+ * on show. There is deliberately no slider for it -- a cross-section is the
+ * view that teaches, and an adjustable wedge only invited fiddling.
+ *
+ * @param cut  0 = whole object, 1 = half removed (cross-section on z = 0)
  */
-export function buildGeometryMesh(geometry, state, cut) {
-  const cutAngle = Math.max(0, Math.min(1, cut)) * (Math.PI / 2);
+export function buildGeometryMesh(geometry, state, cut = CUT_HALF) {
+  const cutAngle = Math.max(0, Math.min(1, cut)) * Math.PI;
   const s = SCENE_PER_METRE;
 
   if (geometry === 'slab') {

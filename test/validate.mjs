@@ -604,35 +604,61 @@ section('14. Geometry meshes sit centred in the vessel');
 // deepened and made it visibly sit off to one side of the retort.
 {
   const st = { halfThickness: 0.02, radius: 0.04365, canHeight: 0.1159 };
-  let worst = 0;
-  let worstCase = '';
-  for (const cut of [0, 0.25, 0.5, 0.75, 1]) {
-    for (const g of ['slab', 'sphere', 'cylinder', 'finiteCylinder']) {
-      const built = buildGeometryMesh(g, st, cut);
-      const p = built.mesh.positions;
-      const lo = [Infinity, Infinity, Infinity];
-      const hi = [-Infinity, -Infinity, -Infinity];
-      for (let i = 0; i < p.length; i += 3) {
-        for (let k = 0; k < 3; k++) {
-          if (p[i + k] < lo[k]) lo[k] = p[i + k];
-          if (p[i + k] > hi[k]) hi[k] = p[i + k];
-        }
-      }
-      // Offset of the bounding-box centre from the origin, in scene units.
-      const off = Math.hypot(
-        ((lo[0] + hi[0]) / 2) * built.scale,
-        ((lo[1] + hi[1]) / 2) * built.scale,
-        ((lo[2] + hi[2]) / 2) * built.scale,
-      );
-      if (off > worst) {
-        worst = off;
-        worstCase = `${g} at cut=${cut}`;
+  const bbox = (built) => {
+    const p = built.mesh.positions;
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < p.length; i += 3) {
+      for (let k = 0; k < 3; k++) {
+        if (p[i + k] < lo[k]) lo[k] = p[i + k];
+        if (p[i + k] > hi[k]) hi[k] = p[i + k];
       }
     }
-  }
+    return { lo, hi };
+  };
+
+  // The whole (uncut) food must sit centred in the vessel.
   // 1e-3 scene units is far below one pixel; anything larger is a real offset,
   // not tessellation round-off on a curved surface.
-  check('worst off-centre offset over all shapes and cuts', worst, 1e-3, worstCase);
+  let worst = 0;
+  let worstCase = '';
+  for (const g of ['slab', 'sphere', 'cylinder', 'finiteCylinder']) {
+    const built = buildGeometryMesh(g, st, 0);
+    const { lo, hi } = bbox(built);
+    const off = Math.hypot(
+      ((lo[0] + hi[0]) / 2) * built.scale,
+      ((lo[1] + hi[1]) / 2) * built.scale,
+      ((lo[2] + hi[2]) / 2) * built.scale,
+    );
+    if (off > worst) {
+      worst = off;
+      worstCase = g;
+    }
+  }
+  check('worst off-centre offset, whole shapes', worst, 1e-3, worstCase);
+
+  // The app always draws the food CUT IN HALF. The cut must pass through the
+  // centre -- the exposed face lies on z = 0 -- and remove exactly the near
+  // half, so the cross-section a student looks at is the one through the
+  // cold spot. x and y must stay centred, and the far side must be intact.
+  let worstCut = 0;
+  let cutCase = '';
+  for (const g of ['slab', 'sphere', 'cylinder', 'finiteCylinder']) {
+    const whole = bbox(buildGeometryMesh(g, st, 0));
+    const built = buildGeometryMesh(g, st, 1);
+    const { lo, hi } = bbox(built);
+    const err = Math.max(
+      Math.abs((lo[0] + hi[0]) / 2),
+      Math.abs((lo[1] + hi[1]) / 2),
+      Math.abs(hi[2]), // cut face on z = 0
+      Math.abs(lo[2] - whole.lo[2]), // far half untouched
+    ) * built.scale;
+    if (err > worstCut) {
+      worstCut = err;
+      cutCase = g;
+    }
+  }
+  check('half cut passes through the centre (z = 0), all shapes', worstCut, 1e-3, cutCase || 'all');
 
   // The slab's field varies along y only (its thickness) and is
   // mirror-symmetric about the mid-plane, because both faces are heated
@@ -641,7 +667,7 @@ section('14. Geometry meshes sit centred in the vessel');
   // mid-plane would expose y = 0 as one large uniformly-cold face and make a
   // slab heated on both faces look as though it is heated on one.
   let asym = 0;
-  for (const cut of [0, 0.25, 0.5, 0.75, 1]) {
+  for (const cut of [0, 0.5, 1]) {
     const p = buildGeometryMesh('slab', st, cut).mesh.positions;
     const key = (x, y, z) => `${x.toFixed(6)},${y.toFixed(6)},${z.toFixed(6)}`;
     const set = new Set();
@@ -655,7 +681,7 @@ section('14. Geometry meshes sit centred in the vessel');
   // Both heated faces must carry the SAME field coordinate (the surface), or
   // the two sides of the slab would be drawn at different temperatures.
   {
-    const built = buildGeometryMesh('slab', st, 0.5);
+    const built = buildGeometryMesh('slab', st, 1);
     const { positions: p, normals: n, uvs } = built.mesh;
     let minU = Infinity;
     let maxU = -Infinity;
